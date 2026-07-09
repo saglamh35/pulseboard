@@ -23,6 +23,9 @@ services:
   grafana:
     image: grafana/grafana:11.1.0
     container_name: pulseboard-grafana
+    environment:
+      # SQLite datasource plugin for the long-term history panels.
+      - GF_INSTALL_PLUGINS=frser-sqlite-datasource
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

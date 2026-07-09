@@ -8,3 +8,11 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
     editable: false
+
+  - name: PulseBoard SQLite
+    uid: pulseboard-sqlite
+    type: frser-sqlite-datasource
+    editable: false
+    jsonData:
+      # Read-only mount of the app's SQLite volume (see docker-compose.yml).
+      path: /data/pulseboard.db
