@@ -1,0 +1,40 @@
+# All ports are bound to 127.0.0.1 on purpose: this stack serves personal
+# health data and must never be reachable from outside the host.
+services:
+  pulseboard:
+    build: .
+    container_name: pulseboard
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - pulseboard-data:/data
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: pulseboard-prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: pulseboard-grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/pulseboard_dashboard.json:/var/lib/grafana/dashboards/pulseboard_dashboard.json:ro
+      # Read-only view of the SQLite file for the Grafana SQLite datasource
+      # (long-term history panels query it directly).
+      - pulseboard-data:/data:ro
+    restart: unless-stopped
+
+volumes:
+  pulseboard-data:
+  prometheus-data:
+  grafana-data:
