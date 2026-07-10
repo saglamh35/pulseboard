@@ -1,0 +1,23 @@
+{
+  "date": "2026-07-09",
+  "metrics": [
+    { "name": "steps", "value": 8250 },
+    { "name": "distance_walking_running", "value": 6.3 },
+    { "name": "flights_climbed", "value": 12 },
+    { "name": "active_energy", "value": 612.5 },
+    { "name": "basal_energy", "value": 1710.0 },
+    { "name": "apple_exercise_time", "value": 38 },
+    { "name": "apple_stand_hours", "value": 11 },
+    { "name": "heart_rate", "value": 51, "aggregation": "min" },
+    { "name": "heart_rate", "value": 74, "aggregation": "avg" },
+    { "name": "heart_rate", "value": 152, "aggregation": "max" },
+    { "name": "resting_heart_rate", "value": 58 },
+    { "name": "walking_heart_rate", "value": 96 },
+    { "name": "heart_rate_variability_sdnn", "value": 48.5 },
+    { "name": "blood_oxygen_saturation", "value": 97.2 },
+    { "name": "respiratory_rate", "value": 14.8 },
+    { "name": "vo2_max", "value": 41.2 },
+    { "name": "sleep_hours", "value": 7.4 },
+    { "name": "body_mass", "value": 78.4 }
+  ]
+}
