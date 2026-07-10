@@ -16,6 +16,7 @@ from prometheus_client.registry import Collector
 
 from pulseboard.metrics import REGISTRY
 from pulseboard.score import compute_health_score
+from pulseboard.trends import ROLLING_DAYS, ROLLING_GAUGES, rising_days, rolling_average
 
 if TYPE_CHECKING:
     from pulseboard.db import Database
@@ -65,6 +66,24 @@ class PulseboardCollector(Collector):
             )
             score_family.add_metric([], score)
             yield score_family
+
+        for metric_name, aggregation, prom_name in ROLLING_GAUGES:
+            average = rolling_average(self._db, metric_name, aggregation)
+            if average is None:
+                continue
+            trend_family = GaugeMetricFamily(
+                prom_name, f"Rolling {ROLLING_DAYS}-day mean of {metric_name} ({aggregation})"
+            )
+            trend_family.add_metric([], average)
+            yield trend_family
+
+        if self._db.history("resting_heart_rate", "avg", days=1):
+            rising_family = GaugeMetricFamily(
+                "pulseboard_resting_heart_rate_rising_days",
+                "Consecutive days the daily resting heart rate has strictly increased",
+            )
+            rising_family.add_metric([], rising_days(self._db, "resting_heart_rate", "avg"))
+            yield rising_family
 
 
 def build_metrics_app(db: "Database"):

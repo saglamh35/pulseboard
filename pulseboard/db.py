@@ -110,5 +110,26 @@ class Database:
         rows = self._conn.execute(sql, params).fetchall()
         return list(reversed(rows))
 
+    def weekly_rollup(self, metric: str, aggregation: str) -> list[sqlite3.Row]:
+        """Per-ISO-week totals and means for one metric, oldest week first.
+
+        `week_start` is the first stored date of that week — what the
+        dashboard uses as the bar's time coordinate.
+        """
+        return self._conn.execute(
+            """
+            SELECT strftime('%Y-%W', date) AS week,
+                   MIN(date) AS week_start,
+                   SUM(value) AS total,
+                   AVG(value) AS mean,
+                   COUNT(*) AS days
+            FROM health_metrics
+            WHERE metric = ? AND aggregation = ?
+            GROUP BY week
+            ORDER BY week_start
+            """,
+            (metric, aggregation),
+        ).fetchall()
+
     def count_rows(self) -> int:
         return int(self._conn.execute("SELECT COUNT(*) FROM health_metrics").fetchone()[0])
