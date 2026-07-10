@@ -92,6 +92,11 @@ The health-score gauge is a documented toy heuristic
 ([docs/SCORE.md](docs/SCORE.md)) — **informational only, not medical
 advice**.
 
+A third *Trends* row adds weekly step rollups and 7-day moving averages
+(sleep, resting HR, HRV), and provisioned **Grafana alert rules** watch the
+derived trend gauges — e.g. resting HR rising 3+ consecutive days, 7-day
+sleep average under 6.5 h ([docs/ALERTING.md](docs/ALERTING.md)).
+
 ## Project layout
 
 ```
@@ -102,11 +107,12 @@ pulseboard/            the Python package
 ├── exporter.py        custom prometheus_client Collector
 ├── score.py           0-100 composite health score
 ├── backfill.py        streaming export.xml backfill CLI
+├── trends.py          rolling averages + rising-days trend gauges
 └── ingest/            payload validation + Health Auto Export adapter
 prometheus/            scrape config
 grafana/               provisioned datasources + dashboard JSON
 samples/               synthetic payloads & export.xml used by the tests
-docs/                  INGEST, SHORTCUT, SCORE, OBSERVABILITY
+docs/                  INGEST, SHORTCUT, SCORE, OBSERVABILITY, ALERTING
 ```
 
 ## Development
