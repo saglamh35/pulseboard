@@ -69,7 +69,13 @@ Mapping rules (`pulseboard/ingest/adapters/health_auto_export.py`):
   aggregation) or `Min`/`Avg`/`Max` fields (either capitalization), stored
   as separate aggregation rows.
 - `sleep_analysis` points use `asleep` (falling back to `totalSleep`/`qty`)
-  hours and are stored as `sleep_hours`.
+  hours and are stored as `sleep_hours`; per-stage fields (`core`, `deep`,
+  `rem`, `awake`) become `sleep_core_hours` / `sleep_deep_hours` /
+  `sleep_rem_hours` / `sleep_awake_hours`.
+- `data.workouts[]` entries (`name`, `start`, `duration`,
+  `activeEnergyBurned`, `distance` — plain numbers or `{"qty": ...}`) are
+  stored one row per session in the `workouts` table for the dashboard's
+  drilldown, keyed on `(start, activity_type)` so re-posts update in place.
 - Each point's `date` field determines the row date, so one payload can
   cover several days.
 
@@ -92,6 +98,10 @@ Mapping rules (`pulseboard/ingest/adapters/health_auto_export.py`):
 | `respiratory_rate` | breaths/min | avg |
 | `vo2_max` | mL/kg/min | latest |
 | `sleep_hours` | h | sum |
+| `sleep_core_hours` | h | sum |
+| `sleep_deep_hours` | h | sum |
+| `sleep_rem_hours` | h | sum |
+| `sleep_awake_hours` | h | sum |
 | `body_mass` | kg | latest |
 | `workouts_count` | count | sum |
 | `workouts_duration_min` | min | sum |
@@ -108,7 +118,9 @@ python -m pulseboard.backfill /path/to/export.xml
 
 The parser streams the file (constant memory), aggregates per day, converts
 units where Apple's exports differ (miles → km, kJ → kcal, SpO2 fraction →
-percent), sums per-night asleep intervals into `sleep_hours`, rolls workouts
-up into daily count/duration/energy, and upserts with `source=export_xml`.
+percent), sums per-night asleep intervals into `sleep_hours` (stage intervals also
+feed the per-stage metrics; awake time never counts toward the total), rolls
+workouts up into daily count/duration/energy **and** stores each workout
+session in the `workouts` table, and upserts with `source=export_xml`.
 Re-running it is idempotent, and live `/ingest` posts for the same dates
 simply overwrite the backfilled values.
