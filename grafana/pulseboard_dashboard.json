@@ -4,7 +4,7 @@
   "tags": ["pulseboard", "health"],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "1m",
   "time": { "from": "now-30d", "to": "now" },
   "panels": [
@@ -213,6 +213,114 @@
         "defaults": {
           "unit": "none",
           "decimals": 0,
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 102,
+      "type": "row",
+      "title": "Trends & weekly rollups — from SQLite",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Steps per week",
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "pulseboard-sqlite" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 25 },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "table",
+          "queryText": "SELECT CAST(strftime('%s', MIN(date)) AS INTEGER) AS time, SUM(value) AS weekly_steps FROM health_metrics WHERE metric = 'steps' AND aggregation = 'sum' GROUP BY strftime('%Y-%W', date) ORDER BY time",
+          "rawQueryText": "SELECT CAST(strftime('%s', MIN(date)) AS INTEGER) AS time, SUM(value) AS weekly_steps FROM health_metrics WHERE metric = 'steps' AND aggregation = 'sum' GROUP BY strftime('%Y-%W', date) ORDER BY time",
+          "timeColumns": ["time"]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "custom": { "drawStyle": "bars", "fillOpacity": 60, "lineWidth": 1 }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Sleep — 7-night moving average",
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "pulseboard-sqlite" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 25 },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "table",
+          "queryText": "SELECT CAST(strftime('%s', date) AS INTEGER) AS time, AVG(value) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS sleep_7d_avg FROM health_metrics WHERE metric = 'sleep_hours' AND aggregation = 'sum' ORDER BY date",
+          "rawQueryText": "SELECT CAST(strftime('%s', date) AS INTEGER) AS time, AVG(value) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS sleep_7d_avg FROM health_metrics WHERE metric = 'sleep_hours' AND aggregation = 'sum' ORDER BY date",
+          "timeColumns": ["time"]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 2, "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Resting HR — daily vs 7-day average",
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "pulseboard-sqlite" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 33 },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "table",
+          "queryText": "SELECT CAST(strftime('%s', date) AS INTEGER) AS time, value AS resting_hr, AVG(value) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS resting_hr_7d_avg FROM health_metrics WHERE metric = 'resting_heart_rate' AND aggregation = 'avg' ORDER BY date",
+          "rawQueryText": "SELECT CAST(strftime('%s', date) AS INTEGER) AS time, value AS resting_hr, AVG(value) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS resting_hr_7d_avg FROM health_metrics WHERE metric = 'resting_heart_rate' AND aggregation = 'avg' ORDER BY date",
+          "timeColumns": ["time"]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "HRV (SDNN) — 7-day moving average",
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "pulseboard-sqlite" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 33 },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "table",
+          "queryText": "SELECT CAST(strftime('%s', date) AS INTEGER) AS time, AVG(value) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS hrv_7d_avg FROM health_metrics WHERE metric = 'heart_rate_variability_sdnn' AND aggregation = 'avg' ORDER BY date",
+          "rawQueryText": "SELECT CAST(strftime('%s', date) AS INTEGER) AS time, AVG(value) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS hrv_7d_avg FROM health_metrics WHERE metric = 'heart_rate_variability_sdnn' AND aggregation = 'avg' ORDER BY date",
+          "timeColumns": ["time"]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 1,
           "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "spanNulls": true }
         },
         "overrides": []
