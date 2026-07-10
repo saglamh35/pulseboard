@@ -20,6 +20,7 @@ from pulseboard.db import Database
 from pulseboard.exporter import build_metrics_app
 from pulseboard.ingest.adapters.health_auto_export import extract_workouts, is_hae_payload, normalize_hae
 from pulseboard.ingest.canonical import CanonicalPayload, normalize
+from pulseboard.insights import insights_summary
 from pulseboard.metrics import REGISTRY
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,11 @@ def create_app(db_path: str | None = None) -> FastAPI:
             "metrics_tracked": len(REGISTRY),
             "version": pulseboard.__version__,
         }
+
+    @app.get("/insights")
+    def insights() -> dict[str, object]:
+        """Correlations and anomalies computed from stored history."""
+        return insights_summary(db)
 
     @app.post("/ingest")
     async def ingest(request: Request) -> dict[str, object]:
