@@ -1,0 +1,20 @@
+PulseBoard is deployed. Nothing is exposed outside the cluster by design —
+use port-forwarding:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "pulseboard.fullname" . }} 8000:8000
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "pulseboard.fullname" . }}-prometheus 9090:9090
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "pulseboard.fullname" . }}-grafana 3000:3000
+
+Push a value:
+
+  curl -X POST http://127.0.0.1:8000/ingest -H 'Content-Type: application/json' \
+    -d '{"date": "2026-07-09", "metrics": [{"name": "steps", "value": 8250}]}'
+
+Backfill an Apple Health export:
+
+  POD=$(kubectl -n {{ .Release.Namespace }} get pod -l app.kubernetes.io/component=app -o name | head -1)
+  kubectl -n {{ .Release.Namespace }} cp export.xml ${POD#pod/}:/tmp/export.xml
+  kubectl -n {{ .Release.Namespace }} exec ${POD#pod/} -- python -m pulseboard.backfill /tmp/export.xml
+
+Grafana login: admin user/password from the {{ .Values.grafana.existingSecret | default (printf "%s-grafana" (include "pulseboard.fullname" .)) }} Secret.
+See docs/K8S.md in the repo for details (incl. the RWO co-scheduling note).

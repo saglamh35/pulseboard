@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "pulseboard.fullname" . }}-data
+  labels:
+    {{- include "pulseboard.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.pulseboard.persistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.pulseboard.persistence.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pulseboard.fullname" . }}
+  labels:
+    {{- include "pulseboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # single RWO volume; never run two writers against the SQLite file
+  selector:
+    matchLabels:
+      {{- include "pulseboard.selector" . | nindent 6 }}
+      app.kubernetes.io/component: app
+  template:
+    metadata:
+      labels:
+        {{- include "pulseboard.selector" . | nindent 8 }}
+        app.kubernetes.io/component: app
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: pulseboard
+          image: "{{ .Values.pulseboard.image.repository }}:{{ .Values.pulseboard.image.tag }}"
+          imagePullPolicy: {{ .Values.pulseboard.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: PULSEBOARD_DB_PATH
+              value: /data/pulseboard.db
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.pulseboard.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "pulseboard.fullname" . }}-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pulseboard.fullname" . }}
+  labels:
+    {{- include "pulseboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "pulseboard.selector" . | nindent 4 }}
+    app.kubernetes.io/component: app
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

@@ -1,0 +1,111 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: pulseboard-daily
+    folder: PulseBoard Alerts
+    interval: 5m
+    rules:
+      - uid: pb-rhr-rising
+        title: Resting heart rate rising 3+ days
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { expr: pulseboard_resting_heart_rate_rising_days, instant: true, refId: A }
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [2.5] }
+        annotations:
+          summary: Daily resting heart rate has increased for 3 or more consecutive days.
+          description: Informational trend signal, not medical advice. See docs/ALERTING.md.
+        labels:
+          severity: info
+
+      - uid: pb-sleep-low
+        title: 7-day average sleep below 6.5h
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { expr: pulseboard_sleep_hours_7d_avg, instant: true, refId: A }
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [6.5] }
+        annotations:
+          summary: Rolling 7-day sleep average dropped below 6.5 hours.
+          description: Informational trend signal, not medical advice. See docs/ALERTING.md.
+        labels:
+          severity: info
+
+      - uid: pb-steps-low
+        title: 7-day average steps below 5000
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { expr: pulseboard_steps_7d_avg, instant: true, refId: A }
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [5000] }
+        annotations:
+          summary: Rolling 7-day step average dropped below 5000.
+          description: Informational trend signal, not medical advice. See docs/ALERTING.md.
+        labels:
+          severity: info
+
+      - uid: pb-score-low
+        title: Health score below 50
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { expr: pulseboard_health_score, instant: true, refId: A }
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [50] }
+        annotations:
+          summary: Composite health score dropped below 50.
+          description: Informational trend signal, not medical advice. See docs/ALERTING.md and docs/SCORE.md.
+        labels:
+          severity: info

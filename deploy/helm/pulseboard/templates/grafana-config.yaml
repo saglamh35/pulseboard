@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "pulseboard.fullname" . }}-grafana-provisioning
+  labels:
+    {{- include "pulseboard.labels" . | nindent 4 }}
+data:
+  # Datasources are templated (not copied from grafana/provisioning) because
+  # the Prometheus URL is the in-cluster Service name here. The uids match
+  # the compose provisioning so the dashboard and alert rules work unchanged.
+  datasources.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://{{ include "pulseboard.fullname" . }}-prometheus:9090
+        isDefault: true
+        editable: false
+      - name: PulseBoard SQLite
+        uid: pulseboard-sqlite
+        type: frser-sqlite-datasource
+        editable: false
+        jsonData:
+          path: /data/pulseboard.db
+  dashboards.yml: |
+    {{- .Files.Get "files/dashboards.yml" | nindent 4 }}
+  pulseboard_alerts.yml: |
+    {{- .Files.Get "files/pulseboard_alerts.yml" | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "pulseboard.fullname" . }}-grafana-dashboard
+  labels:
+    {{- include "pulseboard.labels" . | nindent 4 }}
+data:
+  pulseboard_dashboard.json: |
+    {{- .Files.Get "files/pulseboard_dashboard.json" | nindent 4 }}
+---
+{{- if not .Values.grafana.existingSecret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "pulseboard.fullname" . }}-grafana
+  labels:
+    {{- include "pulseboard.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  admin-user: {{ .Values.grafana.adminUser | quote }}
+  admin-password: {{ .Values.grafana.adminPassword | quote }}
+---
+{{- end }}

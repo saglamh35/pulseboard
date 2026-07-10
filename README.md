@@ -67,6 +67,13 @@ Health Auto Export app ([docs/INGEST.md](docs/INGEST.md)) at
 `POST /ingest`. Both shapes land on the same endpoint; days overlap safely
 because every row is upserted per `(date, metric, aggregation)`.
 
+### Or run it on Kubernetes
+
+A Helm chart under `deploy/helm/pulseboard/` deploys the same three-service
+stack to a home-lab cluster — ClusterIP-only (reach it via
+`kubectl port-forward`, same localhost ethos), PVC-backed, with the Grafana
+provisioning shipped as ConfigMaps. See [docs/K8S.md](docs/K8S.md).
+
 ## Why Prometheus AND SQLite?
 
 Because they answer different questions, and pretending one tool does both
@@ -114,9 +121,10 @@ pulseboard/            the Python package
 ├── trends.py          rolling averages + rising-days trend gauges
 └── ingest/            payload validation + Health Auto Export adapter
 prometheus/            scrape config
+deploy/helm/           Helm chart for home-lab Kubernetes (docs/K8S.md)
 grafana/               provisioned datasources + dashboard JSON
 samples/               synthetic payloads & export.xml used by the tests
-docs/                  INGEST, SHORTCUT, SCORE, OBSERVABILITY, ALERTING
+docs/                  INGEST, SHORTCUT, SCORE, OBSERVABILITY, ALERTING, K8S
 ```
 
 ## Development
@@ -128,8 +136,8 @@ python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt -e .
 .venv/bin/mypy
 ```
 
-CI runs the same three jobs (ruff, mypy, pytest on 3.11/3.12) on every push
-and pull request.
+CI runs the same checks (ruff, mypy, pytest on 3.11/3.12) plus Helm chart
+validation (`helm lint` + kubeconform) on every push and pull request.
 
 ## Privacy
 
