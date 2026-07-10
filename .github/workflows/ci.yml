@@ -40,5 +40,5 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - run: pip install -r requirements-dev.txt
+      - run: pip install -r requirements-dev.txt -e .
       - run: pytest --cov=pulseboard --cov-report=term-missing
