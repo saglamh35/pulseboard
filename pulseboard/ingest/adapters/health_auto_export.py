@@ -46,7 +46,35 @@ def _get_number(point: dict, *keys: str) -> float | None:
         value = point.get(key)
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             return float(value)
+        # HAE/Shortcut payloads sometimes stringify quantities ("8250").
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except ValueError:
+                continue
     return None
+
+
+# HAE blood_pressure points carry systolic/diastolic fields instead of qty;
+# split into the two canonical metrics (same idea as the sleep stage split).
+_BLOOD_PRESSURE_FIELDS = (
+    ("systolic", "blood_pressure_systolic"),
+    ("diastolic", "blood_pressure_diastolic"),
+)
+
+
+def _normalize_blood_pressure(entry: dict, records: list[MetricRecord]) -> None:
+    for point in entry.get("data") or []:
+        if not isinstance(point, dict):
+            continue
+        day = _parse_date(point.get("date"))
+        if day is None:
+            logger.warning("Skipping HAE blood_pressure point without a parseable date")
+            continue
+        for field, canonical in _BLOOD_PRESSURE_FIELDS:
+            value = _get_number(point, field)
+            if value is not None:
+                records.append(MetricRecord(day, canonical, value, "mmHg", "avg", SOURCE))
 
 
 def normalize_hae(payload: dict) -> tuple[list[MetricRecord], list[str]]:
@@ -58,6 +86,9 @@ def normalize_hae(payload: dict) -> tuple[list[MetricRecord], list[str]]:
         if not isinstance(entry, dict):
             continue
         hae_name = str(entry.get("name"))
+        if hae_name == "blood_pressure":
+            _normalize_blood_pressure(entry, records)
+            continue
         canonical_name = HAE_TO_CANONICAL.get(hae_name)
         definition = REGISTRY.get(canonical_name) if canonical_name else None
         if definition is None:

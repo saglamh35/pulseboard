@@ -62,10 +62,11 @@ class TestHAEAdapter:
 
     def test_full_sample_maps_known_metrics(self):
         records, skipped = normalize_hae(load_sample("hae_sample.json"))
-        assert skipped == ["mindful_minutes"]
+        assert skipped == []
         by_key = {(r.metric, r.date, r.aggregation): r for r in records}
         assert by_key[("steps", "2026-07-08", "sum")].value == 11040
         assert by_key[("steps", "2026-07-09", "sum")].value == 8250
+        assert by_key[("mindful_minutes", "2026-07-09", "sum")].value == 10
         assert by_key[("heart_rate", "2026-07-09", "min")].value == 51
         assert by_key[("heart_rate", "2026-07-09", "avg")].value == 74
         assert by_key[("heart_rate", "2026-07-09", "max")].value == 152
@@ -90,6 +91,40 @@ class TestHAEAdapter:
         assert records == []
         assert skipped == []
 
+    def test_unknown_metric_reported_in_skipped(self):
+        payload = {
+            "data": {"metrics": [{"name": "definitely_not_a_metric", "data": [{"date": "2026-07-09", "qty": 1}]}]}
+        }
+        records, skipped = normalize_hae(payload)
+        assert records == []
+        assert skipped == ["definitely_not_a_metric"]
+
+    def test_stringified_qty_is_accepted(self):
+        point = {"date": "2026-07-09 10:00:00 +0200", "qty": "8250"}
+        payload = {"data": {"metrics": [{"name": "step_count", "data": [point]}]}}
+        records, _ = normalize_hae(payload)
+        assert len(records) == 1
+        assert records[0].value == 8250.0
+
+    def test_blood_pressure_splits_into_two_metrics(self):
+        payload = {
+            "data": {
+                "metrics": [
+                    {
+                        "name": "blood_pressure",
+                        "units": "mmHg",
+                        "data": [{"date": "2026-07-09 09:00:00 +0200", "systolic": 118, "diastolic": 76}],
+                    }
+                ]
+            }
+        }
+        records, skipped = normalize_hae(payload)
+        assert skipped == []
+        by_metric = {r.metric: r for r in records}
+        assert by_metric["blood_pressure_systolic"].value == 118
+        assert by_metric["blood_pressure_diastolic"].value == 76
+        assert all(r.aggregation == "avg" and r.unit == "mmHg" for r in records)
+
 
 class TestIngestSniffing:
     def make_client(self, tmp_path) -> TestClient:
@@ -99,16 +134,17 @@ class TestIngestSniffing:
         client = self.make_client(tmp_path)
         response = client.post("/ingest", json=load_sample("canonical_sample.json"))
         assert response.status_code == 200
-        assert response.json() == {"stored": 18, "skipped": [], "workouts": 0}
+        assert response.json() == {"stored": 18, "skipped": [], "workouts": 0, "latest_date": "2026-07-09"}
 
     def test_hae_sample_via_endpoint(self, tmp_path):
         client = self.make_client(tmp_path)
         response = client.post("/ingest", json=load_sample("hae_sample.json"))
         assert response.status_code == 200
         body = response.json()
-        assert body["skipped"] == ["mindful_minutes"]
-        assert body["stored"] == 13
+        assert body["skipped"] == []
+        assert body["stored"] == 14
         assert body["workouts"] == 1
+        assert body["latest_date"] == "2026-07-09"
 
     def test_hae_overlap_updates_canonical_row(self, tmp_path):
         client = self.make_client(tmp_path)

@@ -41,6 +41,7 @@ _SLEEP_STAGE_METRIC = {
 }
 _STAND_HOUR_TYPE = "HKCategoryTypeIdentifierAppleStandHour"
 _STOOD_VALUE = "HKCategoryValueAppleStandHourStood"
+_MINDFUL_TYPE = "HKCategoryTypeIdentifierMindfulSession"
 
 _APPLE_TS_FORMAT = "%Y-%m-%d %H:%M:%S %z"
 
@@ -55,8 +56,12 @@ def _convert_value(canonical: str, value: float, unit: str) -> float:
         return value * 1.609344
     if canonical in ("active_energy", "basal_energy", "workouts_energy_kcal") and unit.lower() == "kj":
         return value / 4.184
-    if canonical == "blood_oxygen_saturation" and value <= 1.0:
+    if canonical in ("blood_oxygen_saturation", "body_fat_percentage") and value <= 1.0:
         return value * 100.0  # exported as a 0-1 fraction
+    if canonical == "walking_speed" and unit == "m/s":
+        return value * 3.6
+    if canonical == "wrist_temperature" and unit == "degF":
+        return (value - 32.0) / 1.8
     return value
 
 
@@ -138,6 +143,19 @@ def _handle_record(elem, agg: _Aggregator) -> None:
     if record_type == _STAND_HOUR_TYPE:
         if elem.get("value") == _STOOD_VALUE:
             agg.add("apple_stand_hours", start[:10], start, 1.0)
+        return
+
+    if record_type == _MINDFUL_TYPE:
+        # Interval record like sleep: the duration is the value, in minutes.
+        end_raw = elem.get("endDate", "")
+        if len(end_raw) < 10:
+            return
+        try:
+            minutes = (_parse_ts(end_raw) - _parse_ts(start)).total_seconds() / 60.0
+        except ValueError:
+            return
+        if minutes > 0:
+            agg.add("mindful_minutes", start[:10], start, minutes)
         return
 
     canonical = HEALTHKIT_TO_CANONICAL.get(record_type)

@@ -147,6 +147,51 @@ class Database:
         rows = self._conn.execute(sql, params).fetchall()
         return list(reversed(rows))
 
+    def last_ingest_at(self) -> str | None:
+        """Most recent ingested_at across metrics and workouts — "is the
+        phone still posting", regardless of which dates the data was for."""
+        row = self._conn.execute(
+            """
+            SELECT MAX(ingested_at) FROM (
+                SELECT ingested_at FROM health_metrics
+                UNION ALL
+                SELECT ingested_at FROM workouts
+            )
+            """
+        ).fetchone()
+        return row[0] if row and row[0] is not None else None
+
+    def latest_metric_date(self) -> str | None:
+        """Newest date we have data FOR — a backfill of old days bumps
+        last_ingest_at but not this, so staleness alerts key off this one."""
+        row = self._conn.execute("SELECT MAX(date) FROM health_metrics").fetchone()
+        return row[0] if row and row[0] is not None else None
+
+    def series(self, metric: str, aggregation: str, days: int) -> dict[str, float]:
+        """{date: value} for the last N stored days, oldest first."""
+        return {row["date"]: float(row["value"]) for row in self.history(metric, aggregation, days=days)}
+
+    def range_stats(self, metric: str, aggregation: str, start: str, end: str) -> sqlite3.Row:
+        """SUM/AVG/COUNT over an inclusive date window (total/mean are NULL
+        when no rows fall in the window)."""
+        return self._conn.execute(
+            """
+            SELECT SUM(value) AS total, AVG(value) AS mean, COUNT(*) AS days
+            FROM health_metrics
+            WHERE metric = ? AND aggregation = ? AND date BETWEEN ? AND ?
+            """,
+            (metric, aggregation, start, end),
+        ).fetchone()
+
+    def workouts_between(self, start: str, end: str) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            """
+            SELECT start, date, activity_type, duration_min, energy_kcal, distance_km, source
+            FROM workouts WHERE date BETWEEN ? AND ? ORDER BY start
+            """,
+            (start, end),
+        ).fetchall()
+
     def upsert_workouts(self, workouts: list[WorkoutRecord]) -> int:
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         self._conn.executemany(
