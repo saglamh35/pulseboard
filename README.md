@@ -13,6 +13,19 @@ Prometheus through a custom exporter — with a provisioned Grafana dashboard
 on top. Built to rehearse the production Prometheus/Grafana exporter pattern
 on data I actually care about.
 
+## TL;DR
+
+```bash
+git clone https://github.com/saglamh35/pulseboard && cd pulseboard
+docker compose up -d --build
+open http://127.0.0.1:3000        # Grafana — the dashboard is already provisioned
+```
+
+Then feed it: backfill your Apple Health `export.xml` once, and point an
+Apple Shortcut or the Health Auto Export app at `POST /ingest` for daily
+values. Everything stays on your machine; nothing is exposed beyond
+localhost. Not medical advice — it's a dashboard, not a doctor.
+
 ```
  Apple Watch / iPhone
    │
