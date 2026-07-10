@@ -15,6 +15,7 @@ from prometheus_client.core import GaugeMetricFamily
 from prometheus_client.registry import Collector
 
 from pulseboard.metrics import REGISTRY
+from pulseboard.score import compute_health_score
 
 if TYPE_CHECKING:
     from pulseboard.db import Database
@@ -55,6 +56,15 @@ class PulseboardCollector(Collector):
                 )
                 family.add_metric([], metric_rows[0]["value"])
                 yield family
+
+        score = compute_health_score(self._db)
+        if score is not None:
+            score_family = GaugeMetricFamily(
+                "pulseboard_health_score",
+                "Composite 0-100 daily score (informational only, not medical advice); see docs/SCORE.md",
+            )
+            score_family.add_metric([], score)
+            yield score_family
 
 
 def build_metrics_app(db: "Database"):

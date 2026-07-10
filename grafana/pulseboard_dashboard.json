@@ -6,21 +6,23 @@
   "schemaVersion": 39,
   "version": 1,
   "refresh": "1m",
-  "time": { "from": "now-6h", "to": "now" },
+  "time": { "from": "now-30d", "to": "now" },
   "panels": [
+    {
+      "id": 100,
+      "type": "row",
+      "title": "Live — today, via Prometheus",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
     {
       "id": 1,
       "type": "stat",
       "title": "Today's steps",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "pulseboard_steps",
-          "instant": true
-        }
-      ],
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "targets": [{ "refId": "A", "expr": "pulseboard_steps", "instant": true }],
       "fieldConfig": {
         "defaults": {
           "unit": "none",
@@ -28,7 +30,10 @@
           "color": { "mode": "thresholds" },
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "blue", "value": null }]
+            "steps": [
+              { "color": "orange", "value": null },
+              { "color": "green", "value": 8000 }
+            ]
           }
         },
         "overrides": []
@@ -39,6 +44,180 @@
         "graphMode": "none",
         "textMode": "auto"
       }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Resting heart rate",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
+      "targets": [{ "refId": "A", "expr": "pulseboard_resting_heart_rate_bpm", "instant": true }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 70 },
+              { "color": "red", "value": 85 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "gauge",
+      "title": "Health score (informational only — not medical advice)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 1 },
+      "targets": [{ "refId": "A", "expr": "pulseboard_health_score", "instant": true }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 50 },
+              { "color": "green", "value": 75 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Sleep last night",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 1 },
+      "targets": [{ "refId": "A", "expr": "pulseboard_sleep_hours", "instant": true }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 6 },
+              { "color": "green", "value": 7 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 101,
+      "type": "row",
+      "title": "History — from SQLite",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Steps per day",
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "pulseboard-sqlite" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "table",
+          "queryText": "SELECT CAST(strftime('%s', date) AS INTEGER) AS time, value AS steps FROM health_metrics WHERE metric = 'steps' AND aggregation = 'sum' ORDER BY date",
+          "rawQueryText": "SELECT CAST(strftime('%s', date) AS INTEGER) AS time, value AS steps FROM health_metrics WHERE metric = 'steps' AND aggregation = 'sum' ORDER BY date",
+          "timeColumns": ["time"]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "custom": { "drawStyle": "bars", "fillOpacity": 60, "lineWidth": 1 }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Sleep hours per night",
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "pulseboard-sqlite" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "table",
+          "queryText": "SELECT CAST(strftime('%s', date) AS INTEGER) AS time, value AS sleep_hours FROM health_metrics WHERE metric = 'sleep_hours' AND aggregation = 'sum' ORDER BY date",
+          "rawQueryText": "SELECT CAST(strftime('%s', date) AS INTEGER) AS time, value AS sleep_hours FROM health_metrics WHERE metric = 'sleep_hours' AND aggregation = 'sum' ORDER BY date",
+          "timeColumns": ["time"]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "custom": { "drawStyle": "bars", "fillOpacity": 60, "lineWidth": 1 }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Resting heart rate per day",
+      "datasource": { "type": "frser-sqlite-datasource", "uid": "pulseboard-sqlite" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "table",
+          "queryText": "SELECT CAST(strftime('%s', date) AS INTEGER) AS time, value AS resting_hr FROM health_metrics WHERE metric = 'resting_heart_rate' AND aggregation = 'avg' ORDER BY date",
+          "rawQueryText": "SELECT CAST(strftime('%s', date) AS INTEGER) AS time, value AS resting_hr FROM health_metrics WHERE metric = 'resting_heart_rate' AND aggregation = 'avg' ORDER BY date",
+          "timeColumns": ["time"]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
     }
   ]
 }
