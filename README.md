@@ -48,7 +48,8 @@ localhost. Not medical advice — it's a dashboard, not a doctor.
 docker compose up -d --build
 ```
 
-- API: `http://127.0.0.1:8000` (`/health`, `/ingest`, `/metrics`)
+- API: `http://127.0.0.1:8000` (`/health`, `/status`, `/ingest`, `/metrics`,
+  `/insights`, `/report/weekly`)
 - Prometheus: `http://127.0.0.1:9090`
 - Grafana: `http://127.0.0.1:3000` (admin/admin on first login) — the
   **PulseBoard** dashboard is provisioned automatically.
@@ -75,10 +76,14 @@ docker exec pulseboard python -m pulseboard.backfill /tmp/export.xml
 
 ### Keep it fresh daily
 
-Point an Apple Shortcut ([docs/SHORTCUT.md](docs/SHORTCUT.md)) or the
-Health Auto Export app ([docs/INGEST.md](docs/INGEST.md)) at
-`POST /ingest`. Both shapes land on the same endpoint; days overlap safely
-because every row is upserted per `(date, metric, aggregation)`.
+Point the Health Auto Export app (recommended) or an Apple Shortcut at
+`POST /ingest` on an hourly automation — [docs/SHORTCUT.md](docs/SHORTCUT.md)
+walks through both. Both shapes land on the same endpoint; days overlap
+safely because every row is upserted per `(date, metric, aggregation)`.
+The dashboard's **Data freshness** stat and a provisioned alert tell you
+when the pipeline stalls, and `python -m pulseboard.doctor` checks the whole
+setup end to end. Exposing the API beyond localhost (Tailscale etc.)? Set
+`PULSEBOARD_API_TOKEN` to require a bearer token on `/ingest`.
 
 ### Or run it on Kubernetes
 
@@ -117,19 +122,37 @@ A third *Trends* row adds weekly step rollups and 7-day moving averages
 derived trend gauges — e.g. resting HR rising 3+ consecutive days, 7-day
 sleep average under 6.5 h ([docs/ALERTING.md](docs/ALERTING.md)).
 
-A fourth row drills deeper: **sleep stages per night** (core/deep/REM/awake,
+An **Insights** row surfaces what the numbers relate to: z-scores of today
+vs your own 30-day baseline (anomaly detection), lag-aware correlations
+(sleep vs next-day HRV, activity vs next-day resting HR) with scatter plots
+behind them, all documented in [docs/INSIGHTS.md](docs/INSIGHTS.md) —
+correlation is not causation.
+
+A final row drills deeper: **sleep stages per night** (core/deep/REM/awake,
 stacked) and a **recent workouts table** fed by a per-session `workouts`
 table that every ingestion path fills alongside the daily rollups.
+
+## Weekly report & notifications
+
+`python -m pulseboard.report` builds a Monday–Sunday week-over-week summary
+(markdown or HTML) with workouts and anomalies, and can push a short digest
+via **ntfy** or **Telegram**. Schedule it with cron, the compose `reports`
+profile, or the Helm CronJob; `--check-freshness --notify` doubles as a
+"data stopped arriving" watchdog. See [docs/REPORTS.md](docs/REPORTS.md).
 
 ## Project layout
 
 ```
 pulseboard/            the Python package
-├── app.py             FastAPI app factory: /ingest, /health, /metrics
+├── app.py             FastAPI app factory: /ingest, /status, /insights, /report/weekly, /metrics
 ├── metrics.py         canonical metric registry (single source of truth)
 ├── db.py              SQLite schema + idempotent upsert + queries
 ├── exporter.py        custom prometheus_client Collector
 ├── score.py           0-100 composite health score
+├── insights.py        correlations + baseline anomaly z-scores
+├── report.py          weekly report CLI (markdown/HTML, --notify, --loop)
+├── notify.py          ntfy / Telegram push (stdlib urllib)
+├── doctor.py          setup wizard: end-to-end pipeline checks
 ├── backfill.py        streaming export.xml backfill CLI
 ├── trends.py          rolling averages + rising-days trend gauges
 └── ingest/            payload validation + Health Auto Export adapter
@@ -137,7 +160,7 @@ prometheus/            scrape config
 deploy/helm/           Helm chart for home-lab Kubernetes (docs/K8S.md)
 grafana/               provisioned datasources + dashboard JSON
 samples/               synthetic payloads & export.xml used by the tests
-docs/                  INGEST, SHORTCUT, SCORE, OBSERVABILITY, ALERTING, K8S
+docs/                  INGEST, SHORTCUT, INSIGHTS, REPORTS, SCORE, OBSERVABILITY, ALERTING, K8S
 ```
 
 ## Development
@@ -156,8 +179,10 @@ validation (`helm lint` + kubeconform) on every push and pull request.
 
 This is *personal* health data — treat the deployment accordingly:
 
-- All ports bind to `127.0.0.1` only; nothing is exposed beyond the host,
-  and there is no authentication in the MVP. Don't forward these ports.
+- All ports bind to `127.0.0.1` only; nothing is exposed beyond the host.
+  Don't forward these ports. If you deliberately expose the API on a private
+  network (Tailscale/WireGuard), set `PULSEBOARD_API_TOKEN` so `/ingest`
+  requires a bearer token.
 - The repository ships **synthetic sample data only**. `.gitignore` blocks
   `export.xml`, `*.db` and `data/` so real data can't be committed by
   accident.

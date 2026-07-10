@@ -7,8 +7,18 @@ anything else is validated as the canonical shape.
 Both paths normalize onto the canonical metric registry
 (`pulseboard/metrics.py`) and upsert one row per `(date, metric, aggregation)`
 — re-posting the same day simply updates the values. The response is always
-`{"stored": <n>, "skipped": [<names>]}`; unknown metric names are skipped and
-reported, never an error.
+`{"stored": <n>, "skipped": [<names>], "workouts": <n>, "latest_date": "..."}`;
+unknown metric names are skipped and reported, never an error. Bodies over
+10 MB are rejected with `413` (that's an `export.xml` — use the backfill CLI).
+
+If the API is exposed beyond localhost, set `PULSEBOARD_API_TOKEN` on the
+server and send `Authorization: Bearer <token>` with every POST — see
+[SHORTCUT.md](SHORTCUT.md). Unset (the default), `/ingest` stays open.
+
+`GET /status` reports what's stored and how fresh it is
+(`rows`, `workouts`, `last_ingest_at`, `latest_data_date`,
+`freshness_seconds`, …) — the first place to look when data doesn't show up,
+alongside `python -m pulseboard.doctor`.
 
 ## Canonical shape
 
@@ -72,6 +82,11 @@ Mapping rules (`pulseboard/ingest/adapters/health_auto_export.py`):
   hours and are stored as `sleep_hours`; per-stage fields (`core`, `deep`,
   `rem`, `awake`) become `sleep_core_hours` / `sleep_deep_hours` /
   `sleep_rem_hours` / `sleep_awake_hours`.
+- `blood_pressure` points carry `systolic`/`diastolic` fields instead of
+  `qty` and are split into `blood_pressure_systolic` /
+  `blood_pressure_diastolic`.
+- Stringified quantities (`"qty": "8250"`) are accepted — some HAE/Shortcut
+  versions stringify numbers.
 - `data.workouts[]` entries (`name`, `start`, `duration`,
   `activeEnergyBurned`, `distance` — plain numbers or `{"qty": ...}`) are
   stored one row per session in the `workouts` table for the dashboard's
@@ -102,7 +117,15 @@ Mapping rules (`pulseboard/ingest/adapters/health_auto_export.py`):
 | `sleep_deep_hours` | h | sum |
 | `sleep_rem_hours` | h | sum |
 | `sleep_awake_hours` | h | sum |
+| `mindful_minutes` | min | sum |
+| `time_in_daylight` | min | sum |
+| `walking_speed` | km/h | avg |
+| `cardio_recovery` | bpm | avg |
+| `wrist_temperature` | degC | avg |
+| `blood_pressure_systolic` | mmHg | avg |
+| `blood_pressure_diastolic` | mmHg | avg |
 | `body_mass` | kg | latest |
+| `body_fat_percentage` | percent | latest |
 | `workouts_count` | count | sum |
 | `workouts_duration_min` | min | sum |
 | `workouts_energy_kcal` | kcal | sum |

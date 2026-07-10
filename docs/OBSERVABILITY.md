@@ -15,7 +15,16 @@ collector queries SQLite for the most recent row of each
   `pulseboard_sleep_hours`, `pulseboard_resting_heart_rate_bpm`;
 - one labelled gauge per multi-aggregation metric, e.g.
   `pulseboard_heart_rate_bpm{agg="min|avg|max"}`;
-- the derived `pulseboard_health_score` (see [SCORE.md](SCORE.md)).
+- the derived `pulseboard_health_score` (see [SCORE.md](SCORE.md));
+- freshness timestamps and insight gauges:
+
+| Gauge | Meaning |
+| --- | --- |
+| `pulseboard_last_ingest_timestamp_seconds` | unix time of the most recent successful ingest (any dates — backfills count) |
+| `pulseboard_latest_data_timestamp_seconds` | unix time (midnight UTC) of the newest day we have data *for* — staleness alerts key off this one |
+| `pulseboard_correlation{pair=...}` | Pearson r between paired daily series over 90 days ([INSIGHTS.md](INSIGHTS.md)) |
+| `pulseboard_correlation_samples{pair=...}` | aligned day pairs behind the r |
+| `pulseboard_zscore{metric=...}` | latest day vs its own 30-day baseline, in standard deviations |
 
 Because the collector reads at scrape time, `/metrics` always reflects the
 database with no refresh loop, no caching layer, and no state in the app.
