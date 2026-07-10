@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from pulseboard.app import create_app
-from pulseboard.ingest.adapters.health_auto_export import is_hae_payload, normalize_hae
+from pulseboard.ingest.adapters.health_auto_export import extract_workouts, is_hae_payload, normalize_hae
 from pulseboard.ingest.canonical import CanonicalPayload, normalize
 
 SAMPLES = Path(__file__).parent.parent / "samples"
@@ -99,7 +99,7 @@ class TestIngestSniffing:
         client = self.make_client(tmp_path)
         response = client.post("/ingest", json=load_sample("canonical_sample.json"))
         assert response.status_code == 200
-        assert response.json() == {"stored": 18, "skipped": []}
+        assert response.json() == {"stored": 18, "skipped": [], "workouts": 0}
 
     def test_hae_sample_via_endpoint(self, tmp_path):
         client = self.make_client(tmp_path)
@@ -107,7 +107,8 @@ class TestIngestSniffing:
         assert response.status_code == 200
         body = response.json()
         assert body["skipped"] == ["mindful_minutes"]
-        assert body["stored"] == 9
+        assert body["stored"] == 13
+        assert body["workouts"] == 1
 
     def test_hae_overlap_updates_canonical_row(self, tmp_path):
         client = self.make_client(tmp_path)
@@ -119,3 +120,27 @@ class TestIngestSniffing:
             ("2026-07-08", 11040.0, "health_auto_export"),
             ("2026-07-09", 8250.0, "health_auto_export"),
         ]
+
+
+class TestHAEWorkoutsAndStages:
+    def test_extract_workouts_from_sample(self):
+        workouts = extract_workouts(load_sample("hae_sample.json"))
+        assert len(workouts) == 1
+        workout = workouts[0]
+        assert workout.activity_type == "Running"
+        assert workout.date == "2026-07-09"
+        assert workout.duration_min == 31.5
+        assert workout.energy_kcal == 342
+        assert workout.distance_km == 5.2
+
+    def test_sleep_stage_fields_become_stage_records(self):
+        records, _ = normalize_hae(load_sample("hae_sample.json"))
+        by_key = {(r.metric, r.aggregation): r.value for r in records}
+        assert by_key[("sleep_core_hours", "sum")] == 4.1
+        assert by_key[("sleep_deep_hours", "sum")] == 1.5
+        assert by_key[("sleep_rem_hours", "sum")] == 1.8
+        assert by_key[("sleep_awake_hours", "sum")] == 0.4
+
+    def test_workout_without_start_is_skipped(self):
+        payload = {"data": {"workouts": [{"name": "Running", "duration": 30}]}}
+        assert extract_workouts(payload) == []

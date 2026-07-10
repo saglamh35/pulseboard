@@ -9,8 +9,13 @@ SAMPLE_XML = str(Path(__file__).parent.parent / "samples" / "sample_export.xml")
 
 
 @pytest.fixture(scope="module")
-def records():
+def parsed():
     return parse_export(SAMPLE_XML)
+
+
+@pytest.fixture(scope="module")
+def records(parsed):
+    return parsed[0]
 
 
 def by_key(records):
@@ -100,3 +105,42 @@ class TestBackfillCli:
         empty = tmp_path / "empty.xml"
         empty.write_text("<HealthData></HealthData>")
         assert main([str(empty), "--db", str(tmp_path / "test.db")]) == 1
+
+
+class TestSleepStages:
+    def test_stage_intervals_feed_stage_metrics(self, records):
+        values = by_key(records)
+        assert values[("sleep_deep_hours", "2026-07-01", "sum")] == 4.0
+        assert values[("sleep_rem_hours", "2026-07-01", "sum")] == 3.0
+        assert values[("sleep_awake_hours", "2026-07-01", "sum")] == 0.25
+
+    def test_awake_excluded_from_asleep_total(self, records):
+        assert by_key(records)[("sleep_hours", "2026-07-01", "sum")] == 7.0
+
+    def test_unspecified_sleep_has_no_stage_rows(self, records):
+        values = by_key(records)
+        assert ("sleep_deep_hours", "2026-07-02", "sum") not in values
+        assert values[("sleep_hours", "2026-07-02", "sum")] == 6.8
+
+
+class TestWorkoutDrilldown:
+    def test_parse_export_yields_workout_rows(self, parsed):
+        workouts = parsed[1]
+        assert len(workouts) == 1
+        workout = workouts[0]
+        assert workout.activity_type == "Running"
+        assert workout.date == "2026-07-02"
+        assert workout.duration_min == 31.5
+        assert workout.energy_kcal == 342
+        assert workout.distance_km == 5.2
+        assert workout.source == "export_xml"
+
+    def test_cli_upserts_workouts_idempotently(self, tmp_path):
+        db_path = str(tmp_path / "w.db")
+        assert main([SAMPLE_XML, "--db", db_path]) == 0
+        assert main([SAMPLE_XML, "--db", db_path]) == 0
+        db = Database(db_path)
+        assert db.count_workouts() == 1
+        row = db.recent_workouts()[0]
+        assert row["activity_type"] == "Running"
+        db.close()

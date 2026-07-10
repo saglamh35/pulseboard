@@ -13,7 +13,7 @@ from pydantic import ValidationError
 
 from pulseboard.db import Database
 from pulseboard.exporter import build_metrics_app
-from pulseboard.ingest.adapters.health_auto_export import is_hae_payload, normalize_hae
+from pulseboard.ingest.adapters.health_auto_export import extract_workouts, is_hae_payload, normalize_hae
 from pulseboard.ingest.canonical import CanonicalPayload, normalize
 
 
@@ -44,8 +44,10 @@ def create_app(db_path: str | None = None) -> FastAPI:
 
         # Shape sniffing: Health Auto Export wraps everything in a top-level
         # "data" object; the canonical shape has date + metrics at the top.
+        workouts = []
         if is_hae_payload(payload):
             records, skipped = normalize_hae(payload)
+            workouts = extract_workouts(payload)
         else:
             try:
                 canonical = CanonicalPayload.model_validate(payload)
@@ -53,6 +55,7 @@ def create_app(db_path: str | None = None) -> FastAPI:
                 raise HTTPException(status_code=422, detail=str(exc))
             records, skipped = normalize(canonical)
         stored = db.upsert_records(records)
-        return {"stored": stored, "skipped": skipped}
+        workouts_stored = db.upsert_workouts(workouts) if workouts else 0
+        return {"stored": stored, "skipped": skipped, "workouts": workouts_stored}
 
     return app

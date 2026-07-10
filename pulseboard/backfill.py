@@ -18,7 +18,7 @@ from collections import defaultdict
 from datetime import datetime
 from xml.etree.ElementTree import iterparse
 
-from pulseboard.db import Database, MetricRecord
+from pulseboard.db import Database, MetricRecord, WorkoutRecord
 from pulseboard.metrics import HEALTHKIT_TO_CANONICAL, REGISTRY
 
 logger = logging.getLogger(__name__)
@@ -32,6 +32,12 @@ _ASLEEP_VALUES = {
     "HKCategoryValueSleepAnalysisAsleepCore",
     "HKCategoryValueSleepAnalysisAsleepDeep",
     "HKCategoryValueSleepAnalysisAsleepREM",
+}
+_SLEEP_STAGE_METRIC = {
+    "HKCategoryValueSleepAnalysisAsleepCore": "sleep_core_hours",
+    "HKCategoryValueSleepAnalysisAsleepDeep": "sleep_deep_hours",
+    "HKCategoryValueSleepAnalysisAsleepREM": "sleep_rem_hours",
+    "HKCategoryValueSleepAnalysisAwake": "sleep_awake_hours",
 }
 _STAND_HOUR_TYPE = "HKCategoryTypeIdentifierAppleStandHour"
 _STOOD_VALUE = "HKCategoryValueAppleStandHourStood"
@@ -64,6 +70,8 @@ class _Aggregator:
         self.stats: dict[tuple[str, str], list[float]] = {}
         # (timestamp, value): last observation wins for "latest" metrics
         self.latest: dict[tuple[str, str], tuple[str, float]] = {}
+        # per-workout drilldown rows (one per <Workout> element)
+        self.workouts: list[WorkoutRecord] = []
 
     def add(self, canonical: str, day: str, timestamp: str, value: float) -> None:
         definition = REGISTRY[canonical]
@@ -107,8 +115,10 @@ def _handle_record(elem, agg: _Aggregator) -> None:
         return
 
     if record_type == _SLEEP_TYPE:
-        if elem.get("value") not in _ASLEEP_VALUES:
-            return
+        value_kind = elem.get("value", "")
+        stage_metric = _SLEEP_STAGE_METRIC.get(value_kind)
+        if value_kind not in _ASLEEP_VALUES and stage_metric is None:
+            return  # InBed and other non-sleep intervals
         end_raw = elem.get("endDate", "")
         if len(end_raw) < 10:
             return
@@ -116,8 +126,13 @@ def _handle_record(elem, agg: _Aggregator) -> None:
             hours = (_parse_ts(end_raw) - _parse_ts(start)).total_seconds() / 3600.0
         except ValueError:
             return
+        hours = max(hours, 0.0)
         # Attribute the interval to the morning it ends: that night's sleep.
-        agg.add("sleep_hours", end_raw[:10], end_raw, max(hours, 0.0))
+        # Awake intervals feed their stage metric but never the asleep total.
+        if value_kind in _ASLEEP_VALUES:
+            agg.add("sleep_hours", end_raw[:10], end_raw, hours)
+        if stage_metric is not None:
+            agg.add(stage_metric, end_raw[:10], end_raw, hours)
         return
 
     if record_type == _STAND_HOUR_TYPE:
@@ -155,11 +170,30 @@ def _handle_workout(elem, agg: _Aggregator) -> None:
         energy = 0.0
     if energy:
         unit = elem.get("totalEnergyBurnedUnit", "kcal")
-        agg.add("workouts_energy_kcal", day, start, _convert_value("workouts_energy_kcal", energy, unit))
+        energy = _convert_value("workouts_energy_kcal", energy, unit)
+        agg.add("workouts_energy_kcal", day, start, energy)
+    try:
+        distance = float(elem.get("totalDistance", ""))
+    except ValueError:
+        distance = 0.0
+    if elem.get("totalDistanceUnit", "km") == "mi":
+        distance *= 1.609344
+    activity = elem.get("workoutActivityType", "Unknown").removeprefix("HKWorkoutActivityType")
+    agg.workouts.append(
+        WorkoutRecord(
+            start=start,
+            date=day,
+            activity_type=activity,
+            duration_min=round(duration, 2),
+            energy_kcal=round(energy, 2),
+            distance_km=round(distance, 3),
+            source=SOURCE,
+        )
+    )
 
 
-def parse_export(path: str) -> list[MetricRecord]:
-    """Stream export.xml and return aggregated daily records."""
+def parse_export(path: str) -> tuple[list[MetricRecord], list[WorkoutRecord]]:
+    """Stream export.xml and return (daily metric records, per-workout rows)."""
     agg = _Aggregator()
     context = iterparse(path, events=("start", "end"))
     _, root = next(context)  # grab the document root so processed children can be dropped
@@ -174,7 +208,7 @@ def parse_export(path: str) -> list[MetricRecord]:
             continue
         elem.clear()
         root.clear()
-    return agg.to_records()
+    return agg.to_records(), agg.workouts
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -186,8 +220,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", default=None, help="SQLite path (default: $PULSEBOARD_DB_PATH or data/pulseboard.db)")
     args = parser.parse_args(argv)
 
-    records = parse_export(args.export_path)
-    if not records:
+    records, workouts = parse_export(args.export_path)
+    if not records and not workouts:
         print("No supported records found in the export.")
         return 1
 
@@ -195,6 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         rows_before = db.count_rows()
         db.upsert_records(records)
+        db.upsert_workouts(workouts)
         rows_after = db.count_rows()
     finally:
         db.close()
@@ -203,6 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Upserted {len(records)} daily rows into {db.path} ({rows_after - rows_before} new, rest updated)")
     print(f"Dates covered: {dates[0]} .. {dates[-1]} ({len(dates)} days)")
     print(f"Metrics: {', '.join(sorted({r.metric for r in records}))}")
+    print(f"Workouts: {len(workouts)} sessions upserted")
     return 0
 
 
