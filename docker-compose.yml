@@ -21,11 +21,14 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:11.1.0
+    image: grafana/grafana:11.6.3
     container_name: pulseboard-grafana
     environment:
       # SQLite datasource plugin for the long-term history panels.
       - GF_INSTALL_PLUGINS=frser-sqlite-datasource
+      # Uncomment (and set) to push severity=warning alerts to an ntfy topic;
+      # see grafana/provisioning/alerting/contactpoints.yml.
+      # - PULSEBOARD_NTFY_URL=${PULSEBOARD_NTFY_URL}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

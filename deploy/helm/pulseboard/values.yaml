@@ -34,7 +34,7 @@ prometheus:
 grafana:
   image:
     repository: grafana/grafana
-    tag: 11.1.0
+    tag: 11.6.3
   adminUser: admin
   adminPassword: admin # change this; or better, pre-create a secret and set existingSecret
   existingSecret: "" # name of a Secret with keys admin-user and admin-password

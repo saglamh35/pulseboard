@@ -84,6 +84,86 @@ groups:
         labels:
           severity: info
 
+      # noDataState: OK keeps a brand-new install quiet before the first
+      # ingest; `python -m pulseboard.doctor` covers that gap.
+      - uid: pb-data-stale
+        title: No new health data for 2 days
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { expr: time() - pulseboard_latest_data_timestamp_seconds, instant: true, refId: A }
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [172800] }
+        annotations:
+          summary: The newest stored data day is more than 2 days old — the phone likely stopped syncing.
+          description: Check the Shortcut/Health Auto Export automation; see docs/SHORTCUT.md and docs/ALERTING.md.
+        labels:
+          severity: warning
+
+      - uid: pb-rhr-anomaly
+        title: Resting heart rate unusually high vs 30-day baseline
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { expr: 'pulseboard_zscore{metric="resting_heart_rate"}', instant: true, refId: A }
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [2.5] }
+        annotations:
+          summary: Today's resting heart rate is more than 2.5 standard deviations above its 30-day baseline.
+          description: Informational anomaly signal, not medical advice. See docs/INSIGHTS.md and docs/ALERTING.md.
+        labels:
+          severity: info
+
+      - uid: pb-hrv-anomaly
+        title: HRV unusually low vs 30-day baseline
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { expr: 'pulseboard_zscore{metric="heart_rate_variability_sdnn"}', instant: true, refId: A }
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [-2.5] }
+        annotations:
+          summary: Today's HRV (SDNN) is more than 2.5 standard deviations below its 30-day baseline.
+          description: Informational anomaly signal, not medical advice. See docs/INSIGHTS.md and docs/ALERTING.md.
+        labels:
+          severity: info
+
       - uid: pb-score-low
         title: Health score below 50
         condition: C

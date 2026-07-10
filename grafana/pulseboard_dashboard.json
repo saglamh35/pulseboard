@@ -7,8 +7,9 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 3,
+  "version": 4,
   "refresh": "1m",
+  "graphTooltip": 1,
   "time": {
     "from": "now-30d",
     "to": "now"
@@ -37,7 +38,7 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 6,
+        "w": 4,
         "x": 0,
         "y": 1
       },
@@ -45,7 +46,7 @@
         {
           "refId": "A",
           "expr": "pulseboard_steps",
-          "instant": true
+          "range": true
         }
       ],
       "fieldConfig": {
@@ -80,7 +81,7 @@
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "none",
+        "graphMode": "area",
         "textMode": "auto"
       }
     },
@@ -94,15 +95,15 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 6,
-        "x": 6,
+        "w": 4,
+        "x": 4,
         "y": 1
       },
       "targets": [
         {
           "refId": "A",
           "expr": "pulseboard_resting_heart_rate_bpm",
-          "instant": true
+          "range": true
         }
       ],
       "fieldConfig": {
@@ -141,7 +142,7 @@
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "none",
+        "graphMode": "area",
         "textMode": "auto"
       }
     },
@@ -155,8 +156,8 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 6,
-        "x": 12,
+        "w": 4,
+        "x": 8,
         "y": 1
       },
       "targets": [
@@ -217,15 +218,15 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 6,
-        "x": 18,
+        "w": 4,
+        "x": 12,
         "y": 1
       },
       "targets": [
         {
           "refId": "A",
           "expr": "pulseboard_sleep_hours",
-          "instant": true
+          "range": true
         }
       ],
       "fieldConfig": {
@@ -264,8 +265,270 @@
           "values": false
         },
         "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Data freshness",
+      "description": "Age of the newest data day. Green under 1 day, yellow under 2, red beyond — red means the phone stopped syncing (see docs/SHORTCUT.md).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - pulseboard_latest_data_timestamp_seconds",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "noValue": "no data yet",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 86400
+              },
+              {
+                "color": "red",
+                "value": 172800
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
         "graphMode": "none",
         "textMode": "auto"
+      }
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "Last ingest",
+      "description": "When the phone last POSTed anything (any dates, backfills included).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "pulseboard_last_ingest_timestamp_seconds * 1000",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeFromNow",
+          "noValue": "never",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 16,
+      "type": "stat",
+      "title": "Heart rate today (min / avg / max)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "pulseboard_heart_rate_bpm",
+          "legendFormat": "{{agg}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "id": 17,
+      "type": "bargauge",
+      "title": "Activity today",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 16,
+        "x": 8,
+        "y": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "pulseboard_active_energy_kcal",
+          "legendFormat": "Active energy (kcal)",
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "pulseboard_apple_exercise_time_min",
+          "legendFormat": "Exercise (min)",
+          "instant": true
+        },
+        {
+          "refId": "C",
+          "expr": "pulseboard_apple_stand_hours",
+          "legendFormat": "Stand (h)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Active energy (kcal)"
+            },
+            "properties": [
+              {
+                "id": "max",
+                "value": 600
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Exercise (min)"
+            },
+            "properties": [
+              {
+                "id": "max",
+                "value": 30
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Stand (h)"
+            },
+            "properties": [
+              {
+                "id": "max",
+                "value": 12
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
       }
     },
     {
@@ -276,7 +539,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 7
+        "y": 13
       },
       "collapsed": false,
       "panels": []
@@ -293,7 +556,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 14
       },
       "targets": [
         {
@@ -310,6 +573,10 @@
         "defaults": {
           "unit": "none",
           "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
           "custom": {
             "drawStyle": "bars",
             "fillOpacity": 60,
@@ -321,7 +588,11 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "last"
+          ]
         }
       }
     },
@@ -337,7 +608,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 22
       },
       "targets": [
         {
@@ -354,6 +625,10 @@
         "defaults": {
           "unit": "h",
           "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
           "custom": {
             "drawStyle": "bars",
             "fillOpacity": 60,
@@ -365,7 +640,11 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "last"
+          ]
         }
       }
     },
@@ -381,7 +660,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 22
       },
       "targets": [
         {
@@ -398,11 +677,15 @@
         "defaults": {
           "unit": "none",
           "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          },
           "custom": {
             "drawStyle": "line",
             "fillOpacity": 10,
             "lineWidth": 2,
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -410,7 +693,11 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "last"
+          ]
         }
       }
     },
@@ -422,14 +709,14 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 24
+        "y": 30
       },
       "collapsed": false,
       "panels": []
     },
     {
       "id": 8,
-      "type": "timeseries",
+      "type": "barchart",
       "title": "Steps per week",
       "datasource": {
         "type": "frser-sqlite-datasource",
@@ -439,32 +726,36 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 25
+        "y": 31
       },
       "targets": [
         {
           "refId": "A",
           "queryType": "table",
-          "queryText": "SELECT CAST(strftime('%s', MIN(date)) AS INTEGER) AS time, SUM(value) AS weekly_steps FROM health_metrics WHERE metric = 'steps' AND aggregation = 'sum' GROUP BY strftime('%Y-%W', date) ORDER BY time",
-          "rawQueryText": "SELECT CAST(strftime('%s', MIN(date)) AS INTEGER) AS time, SUM(value) AS weekly_steps FROM health_metrics WHERE metric = 'steps' AND aggregation = 'sum' GROUP BY strftime('%Y-%W', date) ORDER BY time",
-          "timeColumns": [
-            "time"
-          ]
+          "queryText": "SELECT strftime('%Y-W%W', date) AS week, SUM(value) AS weekly_steps FROM health_metrics WHERE metric = 'steps' AND aggregation = 'sum' GROUP BY week ORDER BY week",
+          "rawQueryText": "SELECT strftime('%Y-W%W', date) AS week, SUM(value) AS weekly_steps FROM health_metrics WHERE metric = 'steps' AND aggregation = 'sum' GROUP BY week ORDER BY week",
+          "timeColumns": []
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "none",
           "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
           "custom": {
-            "drawStyle": "bars",
-            "fillOpacity": 60,
+            "fillOpacity": 70,
             "lineWidth": 1
           }
         },
         "overrides": []
       },
       "options": {
+        "orientation": "auto",
+        "xTickLabelRotation": -45,
+        "showValue": "auto",
         "legend": {
           "displayMode": "list",
           "placement": "bottom"
@@ -483,7 +774,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 25
+        "y": 31
       },
       "targets": [
         {
@@ -500,11 +791,15 @@
         "defaults": {
           "unit": "h",
           "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
           "custom": {
             "drawStyle": "line",
             "fillOpacity": 15,
             "lineWidth": 2,
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -512,7 +807,11 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "last"
+          ]
         }
       }
     },
@@ -528,7 +827,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 33
+        "y": 39
       },
       "targets": [
         {
@@ -549,7 +848,7 @@
             "drawStyle": "line",
             "fillOpacity": 10,
             "lineWidth": 2,
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -557,7 +856,11 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "last"
+          ]
         }
       }
     },
@@ -573,7 +876,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 33
+        "y": 39
       },
       "targets": [
         {
@@ -590,11 +893,15 @@
         "defaults": {
           "unit": "ms",
           "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
           "custom": {
             "drawStyle": "line",
             "fillOpacity": 10,
             "lineWidth": 2,
-            "spanNulls": true
+            "spanNulls": false
           }
         },
         "overrides": []
@@ -602,7 +909,474 @@
       "options": {
         "legend": {
           "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "last"
+          ]
+        }
+      }
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Health score history (informational only)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 47
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "pulseboard_health_score",
+          "legendFormat": "score",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 75
+              }
+            ]
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "thresholdsStyle": {
+              "mode": "area"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "last"
+          ]
+        }
+      }
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Body & fitness — long term",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "pulseboard-sqlite"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 47
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "table",
+          "queryText": "SELECT CAST(strftime('%s', date) AS INTEGER) AS time, SUM(CASE WHEN metric = 'body_mass' THEN value END) AS body_mass_kg, SUM(CASE WHEN metric = 'vo2_max' THEN value END) AS vo2_max FROM health_metrics WHERE metric IN ('body_mass','vo2_max') AND aggregation = 'latest' GROUP BY date ORDER BY date",
+          "rawQueryText": "SELECT CAST(strftime('%s', date) AS INTEGER) AS time, SUM(CASE WHEN metric = 'body_mass' THEN value END) AS body_mass_kg, SUM(CASE WHEN metric = 'vo2_max' THEN value END) AS vo2_max FROM health_metrics WHERE metric IN ('body_mass','vo2_max') AND aggregation = 'latest' GROUP BY date ORDER BY date",
+          "timeColumns": [
+            "time"
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 5,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "pointSize": 5,
+            "showPoints": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "body_mass_kg"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "kg"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "vo2_max"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "last"
+          ]
+        }
+      }
+    },
+    {
+      "id": 104,
+      "type": "row",
+      "title": "Insights — correlations & anomalies (informational only, not medical advice)",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 55
+      },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 20,
+      "type": "bargauge",
+      "title": "Today's z-scores vs 30-day baseline",
+      "description": "How unusual is today compared to your own last 30 days, in standard deviations. |z| ≥ 2 is unusual, |z| ≥ 3 is very unusual.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 56
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "pulseboard_zscore",
+          "legendFormat": "{{metric}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "min": -4,
+          "max": 4,
+          "noValue": "need ≥7 days of history",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": -3
+              },
+              {
+                "color": "green",
+                "value": -2
+              },
+              {
+                "color": "orange",
+                "value": 2
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 21,
+      "type": "bargauge",
+      "title": "Correlations — last 90 days",
+      "description": "Pearson r between paired daily series (lagged pairs compare a day with the next day). Needs ≥14 overlapping days. Correlation is not causation.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 56
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "pulseboard_correlation",
+          "legendFormat": "{{pair}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "min": -1,
+          "max": 1,
+          "noValue": "need ≥14 overlapping days",
+          "color": {
+            "mode": "continuous-RdYlGr"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 22,
+      "type": "xychart",
+      "title": "Sleep vs next-day HRV — last 90 days",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "pulseboard-sqlite"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 64
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "table",
+          "queryText": "SELECT a.value AS sleep_hours, b.value AS next_day_hrv_ms FROM health_metrics a JOIN health_metrics b ON b.date = date(a.date, '+1 day') AND b.metric = 'heart_rate_variability_sdnn' AND b.aggregation = 'avg' WHERE a.metric = 'sleep_hours' AND a.aggregation = 'sum' AND a.date >= date('now', '-90 day')",
+          "rawQueryText": "SELECT a.value AS sleep_hours, b.value AS next_day_hrv_ms FROM health_metrics a JOIN health_metrics b ON b.date = date(a.date, '+1 day') AND b.metric = 'heart_rate_variability_sdnn' AND b.aggregation = 'avg' WHERE a.metric = 'sleep_hours' AND a.aggregation = 'sum' AND a.date >= date('now', '-90 day')",
+          "timeColumns": []
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
+          "custom": {
+            "pointSize": {
+              "fixed": 6
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "seriesMapping": "auto",
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "displayMode": "list",
           "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 23,
+      "type": "xychart",
+      "title": "Active energy vs next-day resting HR — last 90 days",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "pulseboard-sqlite"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 64
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "table",
+          "queryText": "SELECT a.value AS active_energy_kcal, b.value AS next_day_resting_hr FROM health_metrics a JOIN health_metrics b ON b.date = date(a.date, '+1 day') AND b.metric = 'resting_heart_rate' AND b.aggregation = 'avg' WHERE a.metric = 'active_energy' AND a.aggregation = 'sum' AND a.date >= date('now', '-90 day')",
+          "rawQueryText": "SELECT a.value AS active_energy_kcal, b.value AS next_day_resting_hr FROM health_metrics a JOIN health_metrics b ON b.date = date(a.date, '+1 day') AND b.metric = 'resting_heart_rate' AND b.aggregation = 'avg' WHERE a.metric = 'active_energy' AND a.aggregation = 'sum' AND a.date >= date('now', '-90 day')",
+          "timeColumns": []
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "custom": {
+            "pointSize": {
+              "fixed": 6
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "seriesMapping": "auto",
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Resting-HR z-score over time",
+      "description": "Sustained excursions past ±2 mean resting HR is drifting away from its own 30-day baseline.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 73
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "pulseboard_zscore{metric=\"resting_heart_rate\"}",
+          "legendFormat": "resting HR z-score",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "min": -4,
+          "max": 4,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 2
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "spanNulls": true,
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "last"
+          ]
         }
       }
     },
@@ -614,7 +1388,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 41
+        "y": 81
       },
       "collapsed": false,
       "panels": []
@@ -631,7 +1405,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 42
+        "y": 82
       },
       "targets": [
         {
@@ -679,7 +1453,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 42
+        "y": 82
       },
       "targets": [
         {

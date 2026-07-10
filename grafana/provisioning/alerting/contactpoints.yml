@@ -1,0 +1,32 @@
+# Optional: route PulseBoard alerts to an ntfy topic (https://ntfy.sh or
+# self-hosted). Disabled by default — no secrets, no external calls.
+#
+# To enable:
+#   1. Uncomment everything below.
+#   2. Set PULSEBOARD_NTFY_URL for the grafana service (see the commented
+#      `environment` entry in docker-compose.yml), e.g.
+#      PULSEBOARD_NTFY_URL=https://ntfy.sh/my-secret-pulseboard-topic
+#   3. Restart Grafana. Alerts with severity=warning (data staleness) will
+#      be pushed; widen or narrow the matcher to taste.
+#
+# Grafana expands $ENV_VARS in provisioning files at load time.
+
+apiVersion: 1
+
+# contactPoints:
+#   - orgId: 1
+#     name: pulseboard-ntfy
+#     receivers:
+#       - uid: pb-ntfy
+#         type: webhook
+#         settings:
+#           url: $PULSEBOARD_NTFY_URL
+#           httpMethod: POST
+#
+# policies:
+#   - orgId: 1
+#     receiver: grafana-default-email
+#     routes:
+#       - receiver: pulseboard-ntfy
+#         object_matchers:
+#           - ["severity", "=", "warning"]
