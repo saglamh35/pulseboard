@@ -13,6 +13,31 @@ Prometheus through a custom exporter — with a provisioned Grafana dashboard
 on top. Built to rehearse the production Prometheus/Grafana exporter pattern
 on data I actually care about.
 
+![PulseBoard dashboard — Today row](docs/img/dashboard.png)
+
+## Features
+
+- **Live dashboard** — today's steps, resting HR, sleep, health score,
+  heart-rate range and activity progress, refreshed every scrape.
+- **Data freshness watchdog** — a dashboard stat plus a provisioned alert
+  fire when the phone stops syncing for 2 days.
+- **Correlation & anomaly insights** — lag-aware correlations (sleep ↔
+  next-day HRV, activity ↔ next-day resting HR) and day-vs-baseline
+  z-scores, on the dashboard and at `GET /insights`.
+- **Weekly report & notifications** — Monday-morning week-over-week summary
+  with push delivery via ntfy or Telegram.
+- **Three ingestion paths** — Health Auto Export app, plain Apple Shortcut,
+  or a streaming `export.xml` backfill for years of history.
+- **Setup wizard** — `python -m pulseboard.doctor` checks the whole pipeline
+  and tells you exactly what to fix.
+- **Runs anywhere** — Docker Compose on a laptop or a Helm chart on a
+  home-lab cluster; dashboards, datasources and alerts all provisioned as
+  code.
+- **Private by default** — localhost-only ports, optional bearer-token auth,
+  synthetic sample data in the repo, and a firm *not medical advice* stance.
+
+Curious where it's heading? See [docs/ROADMAP.md](docs/ROADMAP.md).
+
 ## TL;DR
 
 ```bash
@@ -108,29 +133,35 @@ The full reasoning lives in [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md).
 
 ## Dashboard
 
-![PulseBoard Grafana dashboard](docs/img/dashboard.png)
+The provisioned dashboard is organized top-down, from "how am I right now"
+to "what does it mean":
 
-*Live row (Prometheus): today's steps, resting heart rate, health score,
-sleep. History row (SQLite): steps, sleep and resting-HR over months.*
+**Today** (hero above): live stats with sparklines, the health-score gauge
+(a documented toy heuristic, [docs/SCORE.md](docs/SCORE.md) —
+**informational only, not medical advice**), heart-rate range, activity
+progress, plus **Data freshness** and **Last ingest** so a stalled phone
+automation is impossible to miss.
 
-The health-score gauge is a documented toy heuristic
-([docs/SCORE.md](docs/SCORE.md)) — **informational only, not medical
-advice**.
+**History** charts every stored day straight from SQLite, and **Trends**
+adds weekly rollups, 7-day moving averages, health-score history and
+long-term body/fitness lines:
 
-A third *Trends* row adds weekly step rollups and 7-day moving averages
-(sleep, resting HR, HRV), and provisioned **Grafana alert rules** watch the
-derived trend gauges — e.g. resting HR rising 3+ consecutive days, 7-day
-sleep average under 6.5 h ([docs/ALERTING.md](docs/ALERTING.md)).
+![Trends row — weekly rollups and moving averages](docs/img/trends.png)
 
-An **Insights** row surfaces what the numbers relate to: z-scores of today
-vs your own 30-day baseline (anomaly detection), lag-aware correlations
-(sleep vs next-day HRV, activity vs next-day resting HR) with scatter plots
-behind them, all documented in [docs/INSIGHTS.md](docs/INSIGHTS.md) —
-correlation is not causation.
+**Insights** shows what the numbers relate to: today's z-scores against
+your own 30-day baseline (anomaly detection), lag-aware correlations, and
+the scatter plots behind them ([docs/INSIGHTS.md](docs/INSIGHTS.md) —
+correlation is not causation):
+
+![Insights row — z-scores, correlations, scatters](docs/img/insights.png)
 
 A final row drills deeper: **sleep stages per night** (core/deep/REM/awake,
 stacked) and a **recent workouts table** fed by a per-session `workouts`
 table that every ingestion path fills alongside the daily rollups.
+
+Provisioned **Grafana alert rules** watch the derived gauges — resting HR
+rising 3+ days, sleep/steps averages dipping, data staleness, and
+baseline anomalies ([docs/ALERTING.md](docs/ALERTING.md)).
 
 ## Weekly report & notifications
 
@@ -160,7 +191,7 @@ prometheus/            scrape config
 deploy/helm/           Helm chart for home-lab Kubernetes (docs/K8S.md)
 grafana/               provisioned datasources + dashboard JSON
 samples/               synthetic payloads & export.xml used by the tests
-docs/                  INGEST, SHORTCUT, INSIGHTS, REPORTS, SCORE, OBSERVABILITY, ALERTING, K8S
+docs/                  INGEST, SHORTCUT, INSIGHTS, REPORTS, SCORE, OBSERVABILITY, ALERTING, K8S, ROADMAP
 ```
 
 ## Development

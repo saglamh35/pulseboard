@@ -7,7 +7,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 4,
+  "version": 5,
   "refresh": "1m",
   "graphTooltip": 1,
   "time": {
@@ -18,7 +18,7 @@
     {
       "id": 100,
       "type": "row",
-      "title": "Live — today, via Prometheus",
+      "title": "Today",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -405,10 +405,65 @@
           "unit": "none",
           "decimals": 0,
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "min"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "avg"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "max"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "reduceOptions": {
@@ -534,7 +589,7 @@
     {
       "id": 101,
       "type": "row",
-      "title": "History — from SQLite",
+      "title": "History",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -587,12 +642,7 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": [
-            "mean",
-            "last"
-          ]
+          "showLegend": false
         }
       }
     },
@@ -639,12 +689,7 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": [
-            "mean",
-            "last"
-          ]
+          "showLegend": false
         }
       }
     },
@@ -692,19 +737,14 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": [
-            "mean",
-            "last"
-          ]
+          "showLegend": false
         }
       }
     },
     {
       "id": 102,
       "type": "row",
-      "title": "Trends & weekly rollups — from SQLite",
+      "title": "Trends",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -757,8 +797,7 @@
         "xTickLabelRotation": -45,
         "showValue": "auto",
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+          "showLegend": false
         }
       }
     },
@@ -806,12 +845,7 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": [
-            "mean",
-            "last"
-          ]
+          "showLegend": false
         }
       }
     },
@@ -851,7 +885,38 @@
             "spanNulls": false
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "resting_hr"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "resting_hr_7d_avg"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -908,12 +973,7 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": [
-            "mean",
-            "last"
-          ]
+          "showLegend": false
         }
       }
     },
@@ -979,12 +1039,7 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": [
-            "mean",
-            "last"
-          ]
+          "showLegend": false
         }
       }
     },
@@ -1079,7 +1134,7 @@
     {
       "id": 104,
       "type": "row",
-      "title": "Insights — correlations & anomalies (informational only, not medical advice)",
+      "title": "Insights",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -1221,7 +1276,7 @@
         "uid": "pulseboard-sqlite"
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 0,
         "y": 64
@@ -1269,7 +1324,7 @@
         "uid": "pulseboard-sqlite"
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 12,
         "y": 64
@@ -1321,7 +1376,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 73
+        "y": 72
       },
       "targets": [
         {
@@ -1372,23 +1427,19 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": [
-            "last"
-          ]
+          "showLegend": false
         }
       }
     },
     {
       "id": 103,
       "type": "row",
-      "title": "Sleep stages & workouts — from SQLite",
+      "title": "Sleep & workouts",
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 81
+        "y": 80
       },
       "collapsed": false,
       "panels": []
@@ -1405,7 +1456,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 82
+        "y": 81
       },
       "targets": [
         {
@@ -1432,7 +1483,68 @@
             }
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "core"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "deep"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "dark-purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rem"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "awake"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -1453,7 +1565,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 82
+        "y": 81
       },
       "targets": [
         {
@@ -1476,5 +1588,7 @@
         "showHeader": true
       }
     }
-  ]
+  ],
+  "description": "Self-hosted Apple Health observability: live daily stats, long-term history, trends, and correlation/anomaly insights. Informational only, not medical advice.",
+  "style": "dark"
 }
