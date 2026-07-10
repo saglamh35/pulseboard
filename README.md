@@ -97,6 +97,10 @@ A third *Trends* row adds weekly step rollups and 7-day moving averages
 derived trend gauges — e.g. resting HR rising 3+ consecutive days, 7-day
 sleep average under 6.5 h ([docs/ALERTING.md](docs/ALERTING.md)).
 
+A fourth row drills deeper: **sleep stages per night** (core/deep/REM/awake,
+stacked) and a **recent workouts table** fed by a per-session `workouts`
+table that every ingestion path fills alongside the daily rollups.
+
 ## Project layout
 
 ```

@@ -63,8 +63,12 @@ _DEFS: tuple[MetricDef, ...] = (
     ),
     MetricDef("respiratory_rate", "breaths/min", ("avg",), "pulseboard_respiratory_rate", "Daily respiratory rate"),
     MetricDef("vo2_max", "mL/kg/min", ("latest",), "pulseboard_vo2_max", "Most recent VO2 max estimate"),
-    # Sleep
+    # Sleep (total + per-stage breakdown; stages sum to sleep_hours, awake excluded)
     MetricDef("sleep_hours", "h", ("sum",), "pulseboard_sleep_hours", "Hours asleep for the night ending that day"),
+    MetricDef("sleep_core_hours", "h", ("sum",), "pulseboard_sleep_core_hours", "Core (light) sleep hours"),
+    MetricDef("sleep_deep_hours", "h", ("sum",), "pulseboard_sleep_deep_hours", "Deep sleep hours"),
+    MetricDef("sleep_rem_hours", "h", ("sum",), "pulseboard_sleep_rem_hours", "REM sleep hours"),
+    MetricDef("sleep_awake_hours", "h", ("sum",), "pulseboard_sleep_awake_hours", "Time awake during the night"),
     # Body
     MetricDef("body_mass", "kg", ("latest",), "pulseboard_body_mass_kg", "Most recent body mass"),
     # Workouts (daily rollups)

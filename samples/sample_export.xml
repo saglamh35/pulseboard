@@ -27,6 +27,7 @@
  <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Apple Watch" startDate="2026-06-30 23:00:00 +0200" endDate="2026-07-01 06:45:00 +0200" value="HKCategoryValueSleepAnalysisInBed"/>
  <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Apple Watch" startDate="2026-06-30 23:10:00 +0200" endDate="2026-07-01 03:10:00 +0200" value="HKCategoryValueSleepAnalysisAsleepDeep"/>
  <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Apple Watch" startDate="2026-07-01 03:30:00 +0200" endDate="2026-07-01 06:30:00 +0200" value="HKCategoryValueSleepAnalysisAsleepREM"/>
+ <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Apple Watch" startDate="2026-07-01 03:10:00 +0200" endDate="2026-07-01 03:25:00 +0200" value="HKCategoryValueSleepAnalysisAwake"/>
 
  <!-- Day 2: 2026-07-02 -->
  <Record type="HKQuantityTypeIdentifierStepCount" sourceName="Apple Watch" unit="count" startDate="2026-07-02 09:00:00 +0200" endDate="2026-07-02 10:00:00 +0200" value="5000"/>

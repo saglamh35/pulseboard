@@ -29,6 +29,30 @@ CREATE TABLE IF NOT EXISTS health_metrics (
 );
 CREATE INDEX IF NOT EXISTS idx_health_metrics_metric_date
     ON health_metrics(metric, date);
+CREATE TABLE IF NOT EXISTS workouts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    start TEXT NOT NULL,
+    date TEXT NOT NULL,
+    activity_type TEXT NOT NULL,
+    duration_min REAL NOT NULL DEFAULT 0,
+    energy_kcal REAL NOT NULL DEFAULT 0,
+    distance_km REAL NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'unknown',
+    ingested_at TEXT NOT NULL,
+    UNIQUE(start, activity_type)
+);
+CREATE INDEX IF NOT EXISTS idx_workouts_date ON workouts(date);
+"""
+
+_WORKOUT_UPSERT_SQL = """
+INSERT INTO workouts (start, date, activity_type, duration_min, energy_kcal, distance_km, source, ingested_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(start, activity_type) DO UPDATE SET
+    duration_min = excluded.duration_min,
+    energy_kcal = excluded.energy_kcal,
+    distance_km = excluded.distance_km,
+    source = excluded.source,
+    ingested_at = excluded.ingested_at
 """
 
 _UPSERT_SQL = """
@@ -52,6 +76,19 @@ class MetricRecord:
     unit: str
     aggregation: str  # "sum" | "min" | "avg" | "max" | "latest"
     source: str  # "canonical" | "health_auto_export" | "export_xml"
+
+
+@dataclass(frozen=True)
+class WorkoutRecord:
+    """One workout session (per-workout drilldown, not the daily rollup)."""
+
+    start: str  # full timestamp, e.g. "2026-07-02 18:00:00 +0200"
+    date: str  # ISO date the workout started
+    activity_type: str  # e.g. "Running" (HKWorkoutActivityType prefix stripped)
+    duration_min: float
+    energy_kcal: float
+    distance_km: float
+    source: str
 
 
 def resolve_db_path() -> str:
@@ -109,6 +146,30 @@ class Database:
             params.append(days)
         rows = self._conn.execute(sql, params).fetchall()
         return list(reversed(rows))
+
+    def upsert_workouts(self, workouts: list[WorkoutRecord]) -> int:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        self._conn.executemany(
+            _WORKOUT_UPSERT_SQL,
+            [
+                (w.start, w.date, w.activity_type, w.duration_min, w.energy_kcal, w.distance_km, w.source, now)
+                for w in workouts
+            ],
+        )
+        self._conn.commit()
+        return len(workouts)
+
+    def recent_workouts(self, limit: int = 20) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            """
+            SELECT start, date, activity_type, duration_min, energy_kcal, distance_km, source
+            FROM workouts ORDER BY start DESC LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    def count_workouts(self) -> int:
+        return int(self._conn.execute("SELECT COUNT(*) FROM workouts").fetchone()[0])
 
     def weekly_rollup(self, metric: str, aggregation: str) -> list[sqlite3.Row]:
         """Per-ISO-week totals and means for one metric, oldest week first.

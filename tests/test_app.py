@@ -23,7 +23,7 @@ class TestIngestCanonical:
             json={"date": "2026-07-09", "metrics": [{"name": "steps", "value": 8250}]},
         )
         assert response.status_code == 200
-        assert response.json() == {"stored": 1, "skipped": []}
+        assert response.json() == {"stored": 1, "skipped": [], "workouts": 0}
 
     def test_unknown_metric_skipped_not_500(self, tmp_path):
         client = make_client(tmp_path)
@@ -35,7 +35,7 @@ class TestIngestCanonical:
             },
         )
         assert response.status_code == 200
-        assert response.json() == {"stored": 1, "skipped": ["definitely_not_a_metric"]}
+        assert response.json() == {"stored": 1, "skipped": ["definitely_not_a_metric"], "workouts": 0}
 
     def test_reingest_updates_value(self, tmp_path):
         client = make_client(tmp_path)
