@@ -31,6 +31,20 @@ prometheus:
     size: 2Gi
     storageClassName: ""
 
+# Optional weekly report CronJob (disabled by default). When enabled it runs
+# `python -m pulseboard.report --notify` on the schedule below, reading the
+# pulseboard PVC read-only. Put the notification env vars
+# (PULSEBOARD_NTFY_URL, PULSEBOARD_NTFY_TOPIC, PULSEBOARD_NTFY_TOKEN,
+# PULSEBOARD_TELEGRAM_BOT_TOKEN, PULSEBOARD_TELEGRAM_CHAT_ID) in a Secret and
+# reference it via notifySecret.
+report:
+  enabled: false
+  schedule: "0 8 * * 1" # Monday 08:00
+  notifySecret: "" # name of a Secret with the PULSEBOARD_* notification keys
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { memory: 128Mi }
+
 grafana:
   image:
     repository: grafana/grafana

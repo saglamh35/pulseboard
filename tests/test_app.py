@@ -106,6 +106,26 @@ class TestStatus:
         assert 0 <= body["freshness_seconds"] < 60
 
 
+class TestWeeklyReportEndpoint:
+    def test_markdown_default(self, tmp_path):
+        client = make_client(tmp_path)
+        response = client.get("/report/weekly")
+        assert response.status_code == 200
+        assert "PulseBoard weekly report" in response.text
+        assert "not medical advice" in response.text
+
+    def test_html_format(self, tmp_path):
+        client = make_client(tmp_path)
+        response = client.get("/report/weekly?format=html")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        assert "<table" in response.text
+
+    def test_bad_format_is_422(self, tmp_path):
+        client = make_client(tmp_path)
+        assert client.get("/report/weekly?format=pdf").status_code == 422
+
+
 class TestIngestGuards:
     def test_oversized_body_is_413(self, tmp_path):
         client = make_client(tmp_path)

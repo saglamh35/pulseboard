@@ -40,6 +40,27 @@ services:
       - pulseboard-data:/data:ro
     restart: unless-stopped
 
+  # Optional weekly-report sidecar: `docker compose --profile reports up -d`.
+  # Emits the report every Monday 08:00 (container-local time) and pushes a
+  # summary via ntfy/Telegram when the PULSEBOARD_* env vars are set.
+  # Reading the SQLite file from a second process is safe here: the reporter
+  # only reads, and writes from the API are short transactions.
+  reporter:
+    build: .
+    container_name: pulseboard-reporter
+    profiles: ["reports"]
+    command:
+      ["python", "-m", "pulseboard.report", "--loop", "--notify", "--out", "/data/reports/"]
+    volumes:
+      - pulseboard-data:/data
+    environment:
+      - PULSEBOARD_NTFY_URL=${PULSEBOARD_NTFY_URL:-}
+      - PULSEBOARD_NTFY_TOPIC=${PULSEBOARD_NTFY_TOPIC:-}
+      - PULSEBOARD_NTFY_TOKEN=${PULSEBOARD_NTFY_TOKEN:-}
+      - PULSEBOARD_TELEGRAM_BOT_TOKEN=${PULSEBOARD_TELEGRAM_BOT_TOKEN:-}
+      - PULSEBOARD_TELEGRAM_CHAT_ID=${PULSEBOARD_TELEGRAM_CHAT_ID:-}
+    restart: unless-stopped
+
 volumes:
   pulseboard-data:
   prometheus-data:

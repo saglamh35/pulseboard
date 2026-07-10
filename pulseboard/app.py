@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import AsyncIterator
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import ValidationError
 
 import pulseboard
@@ -22,6 +23,7 @@ from pulseboard.ingest.adapters.health_auto_export import extract_workouts, is_h
 from pulseboard.ingest.canonical import CanonicalPayload, normalize
 from pulseboard.insights import insights_summary
 from pulseboard.metrics import REGISTRY
+from pulseboard.report import build_weekly_report, render_html, render_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +84,16 @@ def create_app(db_path: str | None = None) -> FastAPI:
     def insights() -> dict[str, object]:
         """Correlations and anomalies computed from stored history."""
         return insights_summary(db)
+
+    @app.get("/report/weekly")
+    def weekly_report(format: str = "md"):
+        """Current week-to-date report, built on the fly."""
+        if format not in ("md", "html"):
+            raise HTTPException(status_code=422, detail="format must be 'md' or 'html'")
+        report = build_weekly_report(db)
+        if format == "html":
+            return HTMLResponse(render_html(report))
+        return PlainTextResponse(render_markdown(report), media_type="text/markdown")
 
     @app.post("/ingest")
     async def ingest(request: Request) -> dict[str, object]:
