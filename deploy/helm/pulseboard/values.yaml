@@ -1,0 +1,52 @@
+# PulseBoard Helm values.
+#
+# Privacy posture matches the compose stack: no Ingress, no LoadBalancer —
+# everything is ClusterIP and reached via `kubectl port-forward`. This chart
+# targets a small home-lab (typically single-node) cluster.
+
+pulseboard:
+  image:
+    # No public image is published: build it yourself (`docker build -t pulseboard:0.1.0 .`)
+    # and push it to your registry or load it into the cluster (e.g. `kind load docker-image`).
+    repository: pulseboard
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 256Mi }
+  persistence:
+    size: 1Gi
+    storageClassName: ""
+
+prometheus:
+  image:
+    repository: prom/prometheus
+    tag: v2.53.0
+  scrapeIntervalSeconds: 60
+  retention: 30d
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+  persistence:
+    size: 2Gi
+    storageClassName: ""
+
+grafana:
+  image:
+    repository: grafana/grafana
+    tag: 11.1.0
+  adminUser: admin
+  adminPassword: admin # change this; or better, pre-create a secret and set existingSecret
+  existingSecret: "" # name of a Secret with keys admin-user and admin-password
+  installPlugins: frser-sqlite-datasource
+  # Grafana mounts the pulseboard PVC read-only for the SQLite history panels.
+  # With a ReadWriteOnce volume both pods must land on the same node, so the
+  # chart adds a required podAffinity to the pulseboard pod. Disable only if
+  # your storage class supports ReadWriteMany.
+  coScheduleWithApp: true
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+  persistence:
+    size: 1Gi
+    storageClassName: ""

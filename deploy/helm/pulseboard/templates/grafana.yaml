@@ -1,0 +1,144 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "pulseboard.fullname" . }}-grafana-data
+  labels:
+    {{- include "pulseboard.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.grafana.persistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.grafana.persistence.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pulseboard.fullname" . }}-grafana
+  labels:
+    {{- include "pulseboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "pulseboard.selector" . | nindent 6 }}
+      app.kubernetes.io/component: grafana
+  template:
+    metadata:
+      labels:
+        {{- include "pulseboard.selector" . | nindent 8 }}
+        app.kubernetes.io/component: grafana
+      annotations:
+        checksum/provisioning: {{ include (print $.Template.BasePath "/grafana-config.yaml") . | sha256sum }}
+    spec:
+      {{- if .Values.grafana.coScheduleWithApp }}
+      # The SQLite history panels read the pulseboard PVC (ReadWriteOnce), so
+      # Grafana must run on the same node as the pulseboard pod.
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  {{- include "pulseboard.selector" . | nindent 18 }}
+                  app.kubernetes.io/component: app
+      {{- end }}
+      securityContext:
+        runAsUser: 472
+        runAsGroup: 472
+        fsGroup: 472
+      containers:
+        - name: grafana
+          image: "{{ .Values.grafana.image.repository }}:{{ .Values.grafana.image.tag }}"
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: GF_INSTALL_PLUGINS
+              value: {{ .Values.grafana.installPlugins | quote }}
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.grafana.existingSecret | default (printf "%s-grafana" (include "pulseboard.fullname" .)) }}
+                  key: admin-user
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.grafana.existingSecret | default (printf "%s-grafana" (include "pulseboard.fullname" .)) }}
+                  key: admin-password
+          readinessProbe:
+            httpGet: { path: /api/health, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/health, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.grafana.resources | nindent 12 }}
+          volumeMounts:
+            - name: grafana-data
+              mountPath: /var/lib/grafana
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            - name: provisioning-dashboards
+              mountPath: /etc/grafana/provisioning/dashboards
+              readOnly: true
+            - name: provisioning-alerting
+              mountPath: /etc/grafana/provisioning/alerting
+              readOnly: true
+            - name: dashboard-json
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: true
+            - name: pulseboard-data
+              mountPath: /data
+              readOnly: true
+      volumes:
+        - name: grafana-data
+          persistentVolumeClaim:
+            claimName: {{ include "pulseboard.fullname" . }}-grafana-data
+        - name: provisioning
+          configMap:
+            name: {{ include "pulseboard.fullname" . }}-grafana-provisioning
+            items:
+              - { key: datasources.yml, path: datasources.yml }
+        - name: provisioning-dashboards
+          configMap:
+            name: {{ include "pulseboard.fullname" . }}-grafana-provisioning
+            items:
+              - { key: dashboards.yml, path: dashboards.yml }
+        - name: provisioning-alerting
+          configMap:
+            name: {{ include "pulseboard.fullname" . }}-grafana-provisioning
+            items:
+              - { key: pulseboard_alerts.yml, path: pulseboard_alerts.yml }
+        - name: dashboard-json
+          configMap:
+            name: {{ include "pulseboard.fullname" . }}-grafana-dashboard
+        - name: pulseboard-data
+          persistentVolumeClaim:
+            claimName: {{ include "pulseboard.fullname" . }}-data
+            readOnly: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pulseboard.fullname" . }}-grafana
+  labels:
+    {{- include "pulseboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "pulseboard.selector" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

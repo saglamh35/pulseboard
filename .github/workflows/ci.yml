@@ -29,6 +29,19 @@ jobs:
       - run: pip install mypy -r requirements.txt
       - run: mypy
 
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.15.4
+      - run: helm lint deploy/helm/pulseboard
+      - name: Validate rendered manifests against Kubernetes schemas
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
+          helm template pulseboard deploy/helm/pulseboard | ./kubeconform -strict -summary
+
   test:
     runs-on: ubuntu-latest
     strategy:
