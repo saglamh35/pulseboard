@@ -17,4 +17,12 @@ Backfill an Apple Health export:
   kubectl -n {{ .Release.Namespace }} exec ${POD#pod/} -- python -m pulseboard.backfill /tmp/export.xml
 
 Grafana login: admin user/password from the {{ .Values.grafana.existingSecret | default (printf "%s-grafana" (include "pulseboard.fullname" .)) }} Secret.
+{{- if .Values.report.enabled }}
+
+Weekly report CronJob is enabled (schedule: {{ .Values.report.schedule }}).
+{{- else }}
+
+Optional: enable the weekly report CronJob with --set report.enabled=true
+(see docs/REPORTS.md for the notification Secret).
+{{- end }}
 See docs/K8S.md in the repo for details (incl. the RWO co-scheduling note).

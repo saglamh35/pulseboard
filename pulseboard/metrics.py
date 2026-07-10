@@ -69,8 +69,51 @@ _DEFS: tuple[MetricDef, ...] = (
     MetricDef("sleep_deep_hours", "h", ("sum",), "pulseboard_sleep_deep_hours", "Deep sleep hours"),
     MetricDef("sleep_rem_hours", "h", ("sum",), "pulseboard_sleep_rem_hours", "REM sleep hours"),
     MetricDef("sleep_awake_hours", "h", ("sum",), "pulseboard_sleep_awake_hours", "Time awake during the night"),
+    # Mindfulness / environment
+    MetricDef("mindful_minutes", "min", ("sum",), "pulseboard_mindful_minutes", "Daily mindful session minutes"),
+    MetricDef(
+        "time_in_daylight", "min", ("sum",), "pulseboard_time_in_daylight_min", "Daily minutes spent in daylight"
+    ),
+    # Mobility / recovery
+    MetricDef("walking_speed", "km/h", ("avg",), "pulseboard_walking_speed_kmh", "Daily average walking speed"),
+    MetricDef(
+        "cardio_recovery",
+        "bpm",
+        ("avg",),
+        "pulseboard_cardio_recovery_bpm",
+        "Daily heart rate recovery one minute after exercise",
+    ),
+    # Vitals
+    MetricDef(
+        "wrist_temperature",
+        "degC",
+        ("avg",),
+        "pulseboard_wrist_temperature_celsius",
+        "Nightly wrist temperature while sleeping",
+    ),
+    MetricDef(
+        "blood_pressure_systolic",
+        "mmHg",
+        ("avg",),
+        "pulseboard_blood_pressure_systolic_mmhg",
+        "Daily systolic blood pressure",
+    ),
+    MetricDef(
+        "blood_pressure_diastolic",
+        "mmHg",
+        ("avg",),
+        "pulseboard_blood_pressure_diastolic_mmhg",
+        "Daily diastolic blood pressure",
+    ),
     # Body
     MetricDef("body_mass", "kg", ("latest",), "pulseboard_body_mass_kg", "Most recent body mass"),
+    MetricDef(
+        "body_fat_percentage",
+        "percent",
+        ("latest",),
+        "pulseboard_body_fat_percentage",
+        "Most recent body fat percentage",
+    ),
     # Workouts (daily rollups)
     MetricDef("workouts_count", "count", ("sum",), "pulseboard_workouts_count", "Number of workouts that day"),
     MetricDef(
@@ -102,6 +145,13 @@ HEALTHKIT_TO_CANONICAL: dict[str, str] = {
     "HKQuantityTypeIdentifierRespiratoryRate": "respiratory_rate",
     "HKQuantityTypeIdentifierVO2Max": "vo2_max",
     "HKQuantityTypeIdentifierBodyMass": "body_mass",
+    "HKQuantityTypeIdentifierBodyFatPercentage": "body_fat_percentage",
+    "HKQuantityTypeIdentifierTimeInDaylight": "time_in_daylight",
+    "HKQuantityTypeIdentifierWalkingSpeed": "walking_speed",
+    "HKQuantityTypeIdentifierAppleSleepingWristTemperature": "wrist_temperature",
+    "HKQuantityTypeIdentifierHeartRateRecoveryOneMinute": "cardio_recovery",
+    "HKQuantityTypeIdentifierBloodPressureSystolic": "blood_pressure_systolic",
+    "HKQuantityTypeIdentifierBloodPressureDiastolic": "blood_pressure_diastolic",
 }
 
 # Health Auto Export metric name -> canonical name (used by the HAE adapter).
@@ -122,6 +172,14 @@ HAE_TO_CANONICAL: dict[str, str] = {
     "vo2_max": "vo2_max",
     "sleep_analysis": "sleep_hours",
     "weight_body_mass": "body_mass",
+    "body_fat_percentage": "body_fat_percentage",
+    "mindful_minutes": "mindful_minutes",
+    "time_in_daylight": "time_in_daylight",
+    "walking_speed": "walking_speed",
+    "apple_sleeping_wrist_temperature": "wrist_temperature",
+    "cardio_recovery": "cardio_recovery",
+    # "blood_pressure" is intentionally absent: its points carry systolic/
+    # diastolic fields and are split in the HAE adapter, like sleep_analysis.
 }
 
 

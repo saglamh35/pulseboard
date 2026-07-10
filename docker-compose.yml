@@ -21,11 +21,14 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:11.1.0
+    image: grafana/grafana:11.6.3
     container_name: pulseboard-grafana
     environment:
       # SQLite datasource plugin for the long-term history panels.
       - GF_INSTALL_PLUGINS=frser-sqlite-datasource
+      # Uncomment (and set) to push severity=warning alerts to an ntfy topic;
+      # see grafana/provisioning/alerting/contactpoints.yml.
+      # - PULSEBOARD_NTFY_URL=${PULSEBOARD_NTFY_URL}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
@@ -35,6 +38,27 @@ services:
       # Read-only view of the SQLite file for the Grafana SQLite datasource
       # (long-term history panels query it directly).
       - pulseboard-data:/data:ro
+    restart: unless-stopped
+
+  # Optional weekly-report sidecar: `docker compose --profile reports up -d`.
+  # Emits the report every Monday 08:00 (container-local time) and pushes a
+  # summary via ntfy/Telegram when the PULSEBOARD_* env vars are set.
+  # Reading the SQLite file from a second process is safe here: the reporter
+  # only reads, and writes from the API are short transactions.
+  reporter:
+    build: .
+    container_name: pulseboard-reporter
+    profiles: ["reports"]
+    command:
+      ["python", "-m", "pulseboard.report", "--loop", "--notify", "--out", "/data/reports/"]
+    volumes:
+      - pulseboard-data:/data
+    environment:
+      - PULSEBOARD_NTFY_URL=${PULSEBOARD_NTFY_URL:-}
+      - PULSEBOARD_NTFY_TOPIC=${PULSEBOARD_NTFY_TOPIC:-}
+      - PULSEBOARD_NTFY_TOKEN=${PULSEBOARD_NTFY_TOKEN:-}
+      - PULSEBOARD_TELEGRAM_BOT_TOKEN=${PULSEBOARD_TELEGRAM_BOT_TOKEN:-}
+      - PULSEBOARD_TELEGRAM_CHAT_ID=${PULSEBOARD_TELEGRAM_CHAT_ID:-}
     restart: unless-stopped
 
 volumes:

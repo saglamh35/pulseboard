@@ -1,0 +1,65 @@
+{{- if .Values.report.enabled }}
+# Weekly report CronJob: one-shot `python -m pulseboard.report --notify`,
+# reading the same PVC the app writes (read-only here). RWO volume: the job
+# must land on the node holding the volume, same constraint as Grafana.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "pulseboard.fullname" . }}-report
+  labels:
+    {{- include "pulseboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: report
+spec:
+  schedule: {{ .Values.report.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "pulseboard.selector" . | nindent 12 }}
+            app.kubernetes.io/component: report
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - topologyKey: kubernetes.io/hostname
+                  labelSelector:
+                    matchLabels:
+                      {{- include "pulseboard.selector" . | nindent 22 }}
+                      app.kubernetes.io/component: app
+          containers:
+            - name: report
+              image: "{{ .Values.pulseboard.image.repository }}:{{ .Values.pulseboard.image.tag }}"
+              imagePullPolicy: {{ .Values.pulseboard.image.pullPolicy }}
+              command:
+                - python
+                - -m
+                - pulseboard.report
+                - --notify
+              env:
+                - name: PULSEBOARD_DB_PATH
+                  value: /data/pulseboard.db
+              {{- with .Values.report.notifySecret }}
+              envFrom:
+                - secretRef:
+                    name: {{ . | quote }}
+              {{- end }}
+              resources:
+                {{- toYaml .Values.report.resources | nindent 16 }}
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: {{ include "pulseboard.fullname" . }}-data
+{{- end }}

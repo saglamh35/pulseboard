@@ -1,4 +1,4 @@
-from pulseboard.db import Database, MetricRecord
+from pulseboard.db import Database, MetricRecord, WorkoutRecord
 
 
 def make_record(**overrides) -> MetricRecord:
@@ -80,3 +80,61 @@ class TestQueries:
         db.upsert_records([make_record(date=f"2026-07-0{i}") for i in range(1, 6)])
         dates = [row["date"] for row in db.history("steps", days=2)]
         assert dates == ["2026-07-04", "2026-07-05"]
+
+
+class TestFreshness:
+    def test_empty_db_returns_none(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        assert db.last_ingest_at() is None
+        assert db.latest_metric_date() is None
+
+    def test_latest_metric_date_is_max_date(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        db.upsert_records([make_record(date="2026-07-03"), make_record(date="2026-07-01")])
+        assert db.latest_metric_date() == "2026-07-03"
+
+    def test_last_ingest_at_covers_workouts_too(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        workout = WorkoutRecord(
+            start="2026-07-02 18:00:00 +0200",
+            date="2026-07-02",
+            activity_type="Running",
+            duration_min=30.0,
+            energy_kcal=300.0,
+            distance_km=5.0,
+            source="canonical",
+        )
+        db.upsert_workouts([workout])
+        assert db.last_ingest_at() is not None
+
+
+class TestRangeQueries:
+    def test_series_maps_dates_to_values(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        db.upsert_records([make_record(date="2026-07-01", value=100.0), make_record(date="2026-07-02", value=200.0)])
+        assert db.series("steps", "sum", days=7) == {"2026-07-01": 100.0, "2026-07-02": 200.0}
+
+    def test_range_stats_window_is_inclusive(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        db.upsert_records([make_record(date=f"2026-07-0{i}", value=float(i * 1000)) for i in range(1, 6)])
+        stats = db.range_stats("steps", "sum", "2026-07-02", "2026-07-04")
+        assert stats["total"] == 9000.0
+        assert stats["mean"] == 3000.0
+        assert stats["days"] == 3
+
+    def test_range_stats_empty_window(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        stats = db.range_stats("steps", "sum", "2026-07-01", "2026-07-07")
+        assert stats["total"] is None
+        assert stats["mean"] is None
+        assert stats["days"] == 0
+
+    def test_workouts_between(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        workouts = [
+            WorkoutRecord("2026-07-01 08:00:00 +0200", "2026-07-01", "Running", 30.0, 300.0, 5.0, "canonical"),
+            WorkoutRecord("2026-07-05 08:00:00 +0200", "2026-07-05", "Cycling", 60.0, 500.0, 20.0, "canonical"),
+        ]
+        db.upsert_workouts(workouts)
+        rows = db.workouts_between("2026-07-01", "2026-07-03")
+        assert [row["activity_type"] for row in rows] == ["Running"]

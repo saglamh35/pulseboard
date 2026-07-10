@@ -8,12 +8,14 @@ and is charted in Grafana directly from there.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Iterator
 
 from prometheus_client import CollectorRegistry, make_asgi_app
 from prometheus_client.core import GaugeMetricFamily
 from prometheus_client.registry import Collector
 
+from pulseboard.insights import ANOMALY_METRICS, CORRELATION_PAIRS, WINDOW_DAYS, correlation, zscore_latest
 from pulseboard.metrics import REGISTRY
 from pulseboard.score import compute_health_score
 from pulseboard.trends import ROLLING_DAYS, ROLLING_GAUGES, rising_days, rolling_average
@@ -84,6 +86,76 @@ class PulseboardCollector(Collector):
             )
             rising_family.add_metric([], rising_days(self._db, "resting_heart_rate", "avg"))
             yield rising_family
+
+        yield from self._freshness_families()
+        yield from self._insight_families()
+
+    def _insight_families(self) -> Iterator[GaugeMetricFamily]:
+        """Correlation and anomaly gauges from pulseboard.insights; computed
+        per scrape like everything else (trivial at personal-data scale)."""
+        corr_family = GaugeMetricFamily(
+            "pulseboard_correlation",
+            f"Pearson r between two daily series over the last {WINDOW_DAYS} days "
+            "(informational only; correlation is not causation)",
+            labels=["pair"],
+        )
+        samples_family = GaugeMetricFamily(
+            "pulseboard_correlation_samples",
+            "Number of aligned day pairs behind pulseboard_correlation",
+            labels=["pair"],
+        )
+        has_correlations = False
+        for pair in CORRELATION_PAIRS:
+            result = correlation(self._db, pair)
+            if result is None:
+                continue
+            r, n = result
+            corr_family.add_metric([pair.key], r)
+            samples_family.add_metric([pair.key], n)
+            has_correlations = True
+        if has_correlations:
+            yield corr_family
+            yield samples_family
+
+        zscore_family = GaugeMetricFamily(
+            "pulseboard_zscore",
+            "Latest day's value vs. its 30-day baseline, in standard deviations "
+            "(informational only, not medical advice)",
+            labels=["metric"],
+        )
+        has_zscores = False
+        for metric, aggregation in ANOMALY_METRICS:
+            z = zscore_latest(self._db, metric, aggregation)
+            if z is None:
+                continue
+            zscore_family.add_metric([metric], z)
+            has_zscores = True
+        if has_zscores:
+            yield zscore_family
+
+    def _freshness_families(self) -> Iterator[GaugeMetricFamily]:
+        """Two distinct freshness signals: when did the phone last POST
+        anything (ingest), and how new is the newest data day (staleness
+        alerts key off the latter — a backfill of old days bumps only the
+        former)."""
+        last_ingest = self._db.last_ingest_at()
+        if last_ingest is not None:
+            ingest_family = GaugeMetricFamily(
+                "pulseboard_last_ingest_timestamp_seconds",
+                "Unix time of the most recent successful ingest (any dates)",
+            )
+            ingest_family.add_metric([], datetime.fromisoformat(last_ingest).timestamp())
+            yield ingest_family
+
+        latest_date = self._db.latest_metric_date()
+        if latest_date is not None:
+            data_family = GaugeMetricFamily(
+                "pulseboard_latest_data_timestamp_seconds",
+                "Unix time (midnight UTC) of the newest day we have data for",
+            )
+            midnight = datetime.fromisoformat(latest_date).replace(tzinfo=timezone.utc)
+            data_family.add_metric([], midnight.timestamp())
+            yield data_family
 
 
 def build_metrics_app(db: "Database"):
