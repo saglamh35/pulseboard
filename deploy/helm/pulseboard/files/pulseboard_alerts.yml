@@ -189,3 +189,81 @@ groups:
           description: Informational trend signal, not medical advice. See docs/ALERTING.md and docs/SCORE.md.
         labels:
           severity: info
+
+      - uid: pb-readiness-low
+        title: Readiness score below 40
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { expr: pulseboard_readiness_score, instant: true, refId: A }
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [40] }
+        annotations:
+          summary: Morning readiness dropped below 40 — recovery-focused signal.
+          description: Informational trend signal, not medical advice. See docs/SCORE.md and docs/ALERTING.md.
+        labels:
+          severity: info
+
+      - uid: pb-sleep-debt-high
+        title: Sleep debt above 7 hours over the last 14 nights
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { expr: pulseboard_sleep_debt_hours, instant: true, refId: A }
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [7] }
+        annotations:
+          summary: Cumulative sleep shortfall vs the 7 h goal exceeded 7 hours — roughly one lost night in two weeks.
+          description: Informational trend signal, not medical advice. See docs/GOALS.md and docs/ALERTING.md.
+        labels:
+          severity: info
+
+      - uid: pb-acwr-high
+        title: Training load ramping too fast (ACWR above 1.5)
+        condition: C
+        for: 0m
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model: { expr: pulseboard_training_load_acwr, instant: true, refId: A }
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [1.5] }
+        annotations:
+          summary: 7-day workout load is more than 1.5x your 4-week baseline — a classic overtraining signal.
+          description: Informational trend signal, not medical or training advice. See docs/TRAINING_LOAD.md and docs/ALERTING.md.
+        labels:
+          severity: warning

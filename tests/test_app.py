@@ -60,6 +60,43 @@ class TestIngestCanonical:
         assert response.status_code == 400
 
 
+class TestIngestWorkoutRollups:
+    def _hae_payload(self, *durations: float) -> dict:
+        return {
+            "data": {
+                "metrics": [],
+                "workouts": [
+                    {
+                        "name": "Running",
+                        "start": f"2026-07-09 {8 + i:02d}:00:00 +0000",
+                        "duration": duration,
+                        "activeEnergyBurned": {"qty": 100.0, "units": "kcal"},
+                    }
+                    for i, duration in enumerate(durations)
+                ],
+            }
+        }
+
+    def test_live_ingest_writes_daily_rollups(self, tmp_path):
+        client = make_client(tmp_path)
+        response = client.post("/ingest", json=self._hae_payload(30.0, 20.0))
+        assert response.status_code == 200
+        body = client.get("/metrics").text
+        assert "pulseboard_workouts_count 2.0" in body
+        assert "pulseboard_workouts_duration_min 50.0" in body
+        assert "pulseboard_workouts_energy_kcal 200.0" in body
+
+    def test_rollups_recomputed_across_posts(self, tmp_path):
+        # A day's workouts can arrive over several POSTs; the rollup is
+        # recomputed from the DB, not accumulated from payloads.
+        client = make_client(tmp_path)
+        client.post("/ingest", json=self._hae_payload(30.0, 20.0))
+        client.post("/ingest", json=self._hae_payload(30.0, 20.0, 10.0))
+        body = client.get("/metrics").text
+        assert "pulseboard_workouts_count 3.0" in body
+        assert "pulseboard_workouts_duration_min 60.0" in body
+
+
 class TestMetricsEndpoint:
     def test_exposes_latest_steps_gauge(self, tmp_path):
         client = make_client(tmp_path)

@@ -3,9 +3,10 @@
 `python -m pulseboard.report` builds a Monday–Sunday summary of the current
 week against the previous one — totals for activity metrics (steps,
 distance, energy, exercise minutes, workouts), nightly/daily means for
-sleep, resting HR and HRV — plus the week's workouts and any current
-anomalies ([INSIGHTS.md](INSIGHTS.md)). Informational only, not medical
-advice.
+sleep, resting HR and HRV — plus a **Goals** section (per-goal "met N/7
+days" lines with the current streak, and the 14-night sleep debt —
+[GOALS.md](GOALS.md)), the week's workouts and any current anomalies
+([INSIGHTS.md](INSIGHTS.md)). Informational only, not medical advice.
 
 ## CLI
 

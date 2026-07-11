@@ -138,3 +138,30 @@ class TestRangeQueries:
         db.upsert_workouts(workouts)
         rows = db.workouts_between("2026-07-01", "2026-07-03")
         assert [row["activity_type"] for row in rows] == ["Running"]
+
+    def test_earliest_workout_date(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        assert db.earliest_workout_date() is None
+        db.upsert_workouts(
+            [
+                WorkoutRecord("2026-07-05 08:00:00 +0200", "2026-07-05", "Cycling", 60.0, 500.0, 20.0, "canonical"),
+                WorkoutRecord("2026-07-01 08:00:00 +0200", "2026-07-01", "Running", 30.0, 300.0, 5.0, "canonical"),
+            ]
+        )
+        assert db.earliest_workout_date() == "2026-07-01"
+
+    def test_workout_rollups_for_dates(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        db.upsert_workouts(
+            [
+                WorkoutRecord("2026-07-01 08:00:00 +0200", "2026-07-01", "Running", 30.0, 300.0, 5.0, "canonical"),
+                WorkoutRecord("2026-07-01 18:00:00 +0200", "2026-07-01", "Yoga", 20.0, 80.0, 0.0, "canonical"),
+                WorkoutRecord("2026-07-05 08:00:00 +0200", "2026-07-05", "Cycling", 60.0, 500.0, 20.0, "canonical"),
+            ]
+        )
+        assert db.workout_rollups_for_dates([]) == []
+        rows = {row["date"]: row for row in db.workout_rollups_for_dates(["2026-07-01", "2026-07-02"])}
+        assert set(rows) == {"2026-07-01"}
+        assert rows["2026-07-01"]["count"] == 2
+        assert rows["2026-07-01"]["duration_min"] == 50.0
+        assert rows["2026-07-01"]["energy_kcal"] == 380.0

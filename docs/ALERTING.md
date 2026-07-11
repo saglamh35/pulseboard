@@ -18,10 +18,15 @@ in production.
 | Resting HR unusually high vs baseline | z-score > 2.5 | `pulseboard_zscore{metric="resting_heart_rate"}` |
 | HRV unusually low vs baseline | z-score < −2.5 | `pulseboard_zscore{metric="heart_rate_variability_sdnn"}` |
 | Health score below 50 | score < 50 | `pulseboard_health_score` |
+| Readiness score below 40 | readiness < 40 | `pulseboard_readiness_score` |
+| Sleep debt above 7 h (14 nights) | cumulative shortfall > 7 h | `pulseboard_sleep_debt_hours` |
+| Training load ramping too fast | ACWR > 1.5 | `pulseboard_training_load_acwr` |
 
 The staleness rule carries `severity=warning` (it means the pipeline broke,
-not your body); everything else is `severity=info`. Anomaly z-scores are
-explained in [INSIGHTS.md](INSIGHTS.md).
+not your body), as does the training-load rule (it has an actionable
+"ease off this week" framing — see [TRAINING_LOAD.md](TRAINING_LOAD.md));
+everything else is `severity=info`. Anomaly z-scores are explained in
+[INSIGHTS.md](INSIGHTS.md); goals and sleep debt in [GOALS.md](GOALS.md).
 
 Notes:
 

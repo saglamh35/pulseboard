@@ -15,9 +15,12 @@ from prometheus_client import CollectorRegistry, make_asgi_app
 from prometheus_client.core import GaugeMetricFamily
 from prometheus_client.registry import Collector
 
+from pulseboard.goals import GOAL_DEFS, SLEEP_DEBT_DAYS, sleep_debt_hours, streak_days
 from pulseboard.insights import ANOMALY_METRICS, CORRELATION_PAIRS, WINDOW_DAYS, correlation, zscore_latest
 from pulseboard.metrics import REGISTRY
+from pulseboard.readiness import compute_readiness_score
 from pulseboard.score import compute_health_score
+from pulseboard.training_load import ACUTE_DAYS, CHRONIC_DAYS, compute_training_load
 from pulseboard.trends import ROLLING_DAYS, ROLLING_GAUGES, rising_days, rolling_average
 
 if TYPE_CHECKING:
@@ -69,6 +72,19 @@ class PulseboardCollector(Collector):
             score_family.add_metric([], score)
             yield score_family
 
+        readiness = compute_readiness_score(self._db)
+        if readiness is not None:
+            readiness_family = GaugeMetricFamily(
+                "pulseboard_readiness_score",
+                "Morning readiness 0-100 from HRV, resting HR and last night's sleep "
+                "(informational only, not medical advice); see docs/SCORE.md",
+            )
+            readiness_family.add_metric([], readiness)
+            yield readiness_family
+
+        yield from self._goal_families()
+        yield from self._training_load_families()
+
         for metric_name, aggregation, prom_name in ROLLING_GAUGES:
             average = rolling_average(self._db, metric_name, aggregation)
             if average is None:
@@ -89,6 +105,67 @@ class PulseboardCollector(Collector):
 
         yield from self._freshness_families()
         yield from self._insight_families()
+
+    def _goal_families(self) -> Iterator[GaugeMetricFamily]:
+        """Goal streaks, goal targets and sleep debt (docs/GOALS.md)."""
+        streak_family = GaugeMetricFamily(
+            "pulseboard_goal_streak_days",
+            "Consecutive days the daily goal was met, ending at the metric's latest stored day; see docs/GOALS.md",
+            labels=["metric"],
+        )
+        target_family = GaugeMetricFamily(
+            "pulseboard_goal_target",
+            "Configured daily goal value per metric (registry-declared); see docs/GOALS.md",
+            labels=["metric"],
+        )
+        has_streaks = False
+        for definition in GOAL_DEFS:
+            streak = streak_days(self._db, definition.name)
+            if streak is None:
+                continue
+            streak_family.add_metric([definition.name], streak)
+            assert definition.goal is not None
+            target_family.add_metric([definition.name], definition.goal.value)
+            has_streaks = True
+        if has_streaks:
+            yield streak_family
+            yield target_family
+
+        debt = sleep_debt_hours(self._db)
+        if debt is not None:
+            debt_family = GaugeMetricFamily(
+                "pulseboard_sleep_debt_hours",
+                f"Cumulative sleep shortfall vs the daily sleep goal over the last {SLEEP_DEBT_DAYS} nights "
+                "(informational only, not medical advice); see docs/GOALS.md",
+            )
+            debt_family.add_metric([], debt)
+            yield debt_family
+
+    def _training_load_families(self) -> Iterator[GaugeMetricFamily]:
+        """Acute/chronic workout load and their ratio (docs/TRAINING_LOAD.md)."""
+        load = compute_training_load(self._db)
+        if load is None:
+            return
+        acute_family = GaugeMetricFamily(
+            f"pulseboard_training_load_acute_{ACUTE_DAYS}d_minutes",
+            f"Total workout minutes over the last {ACUTE_DAYS} days",
+        )
+        acute_family.add_metric([], load.acute_minutes)
+        yield acute_family
+        chronic_family = GaugeMetricFamily(
+            f"pulseboard_training_load_chronic_{CHRONIC_DAYS}d_minutes",
+            f"Total workout minutes over the last {CHRONIC_DAYS} days",
+        )
+        chronic_family.add_metric([], load.chronic_minutes)
+        yield chronic_family
+        if load.acwr is not None:
+            acwr_family = GaugeMetricFamily(
+                "pulseboard_training_load_acwr",
+                "Acute:chronic workload ratio — 7-day vs 28-day daily-average workout minutes "
+                "(informational only, not medical advice); see docs/TRAINING_LOAD.md",
+            )
+            acwr_family.add_metric([], load.acwr)
+            yield acwr_family
 
     def _insight_families(self) -> Iterator[GaugeMetricFamily]:
         """Correlation and anomaly gauges from pulseboard.insights; computed

@@ -19,7 +19,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from pulseboard.db import Database
+from pulseboard.goals import GOAL_DEFS, SLEEP_DEBT_DAYS, goals_met_in_window, sleep_debt_hours, streak_days
 from pulseboard.insights import Anomaly, detect_anomalies
+from pulseboard.metrics import REGISTRY
 from pulseboard.notify import notify_all
 
 logger = logging.getLogger(__name__)
@@ -60,10 +62,20 @@ class WorkoutLine:
 
 
 @dataclass(frozen=True)
+class GoalLine:
+    label: str  # e.g. "Steps ≥ 8000"
+    met_days: int
+    days_with_data: int
+    streak_days: int | None
+
+
+@dataclass(frozen=True)
 class WeeklyReport:
     week_start: str  # Monday, ISO date
     week_end: str  # Sunday, ISO date
     comparisons: list[MetricComparison]
+    goals: list[GoalLine]
+    sleep_debt_hours: float | None
     workouts: list[WorkoutLine]
     anomalies: list[Anomaly]
     freshness_seconds: float | None
@@ -91,6 +103,15 @@ def freshness_seconds(db: Database, now: datetime | None = None) -> float | None
     return ((now or datetime.now(timezone.utc)) - ingested).total_seconds()
 
 
+def _goal_label(metric: str) -> str:
+    definition = REGISTRY[metric]
+    goal = definition.goal
+    assert goal is not None
+    symbol = "≥" if goal.direction == "at_least" else "≤"
+    unit = f" {definition.unit}" if definition.unit not in ("", "count") else ""
+    return f"{metric.replace('_', ' ').capitalize()} {symbol} {goal.value:g}{unit}"
+
+
 def build_weekly_report(db: Database, week_ending: date_type | None = None) -> WeeklyReport:
     week_ending = week_ending or date_type.today()
     this_start, this_end = _week_window(week_ending)
@@ -104,6 +125,13 @@ def build_weekly_report(db: Database, week_ending: date_type | None = None) -> W
         if this_value is not None and last_value is not None and last_value != 0:
             delta_pct = round((this_value - last_value) / abs(last_value) * 100.0, 1)
         comparisons.append(MetricComparison(label, unit, this_value, last_value, delta_pct, days))
+
+    goals: list[GoalLine] = []
+    for definition in GOAL_DEFS:
+        met, with_data = goals_met_in_window(db, definition.name, this_start.isoformat(), this_end.isoformat())
+        if with_data == 0:
+            continue
+        goals.append(GoalLine(_goal_label(definition.name), met, with_data, streak_days(db, definition.name)))
 
     workouts = [
         WorkoutLine(
@@ -120,6 +148,8 @@ def build_weekly_report(db: Database, week_ending: date_type | None = None) -> W
         week_start=this_start.isoformat(),
         week_end=this_end.isoformat(),
         comparisons=comparisons,
+        goals=goals,
+        sleep_debt_hours=sleep_debt_hours(db),
         workouts=workouts,
         anomalies=detect_anomalies(db),
         freshness_seconds=freshness_seconds(db),
@@ -154,6 +184,20 @@ def render_markdown(report: WeeklyReport) -> str:
         )
     lines.append("")
 
+    if report.goals or report.sleep_debt_hours is not None:
+        lines += ["## Goals", ""]
+        for g in report.goals:
+            streak = f" (streak: {g.streak_days} days)" if g.streak_days else ""
+            lines.append(f"- {g.label}: met {g.met_days}/{g.days_with_data} days{streak}")
+        if report.sleep_debt_hours is not None:
+            sleep_goal = REGISTRY["sleep_hours"].goal
+            assert sleep_goal is not None
+            lines.append(
+                f"- Sleep debt (last {SLEEP_DEBT_DAYS} nights): {report.sleep_debt_hours:g} h "
+                f"vs the {sleep_goal.value:g} h goal"
+            )
+        lines.append("")
+
     if report.workouts:
         lines += ["## Workouts", ""]
         for w in report.workouts:
@@ -187,6 +231,15 @@ def render_html(report: WeeklyReport) -> str:
         f"<td>{c.days_with_data}</td></tr>"
         for c in report.comparisons
     )
+    goal_items = [
+        f"<li>{g.label}: met {g.met_days}/{g.days_with_data} days"
+        + (f" (streak: {g.streak_days} days)" if g.streak_days else "")
+        + "</li>"
+        for g in report.goals
+    ]
+    if report.sleep_debt_hours is not None:
+        goal_items.append(f"<li>Sleep debt (last {SLEEP_DEBT_DAYS} nights): {report.sleep_debt_hours:g} h</li>")
+    goals = "".join(goal_items) or "<li>no goal data yet</li>"
     workouts = (
         "".join(f"<li>{w.date} — {w.activity_type} ({w.duration_min:g} min)</li>" for w in report.workouts)
         or "<li>none recorded</li>"
@@ -203,6 +256,7 @@ def render_html(report: WeeklyReport) -> str:
 <tr><th>Metric</th><th>This week</th><th>Last week</th><th>Change</th><th>Days</th></tr>
 {rows}
 </table>
+<h2>Goals</h2><ul>{goals}</ul>
 <h2>Workouts</h2><ul>{workouts}</ul>
 <h2>Anomalies</h2><ul>{anomalies}</ul>
 <hr><p><em>{DISCLAIMER}</em></p>

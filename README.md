@@ -24,6 +24,10 @@ on data I actually care about.
 - **Correlation & anomaly insights** — lag-aware correlations (sleep ↔
   next-day HRV, activity ↔ next-day resting HR) and day-vs-baseline
   z-scores, on the dashboard and at `GET /insights`.
+- **Recovery & goals** — a morning readiness score (HRV + resting HR +
+  sleep), registry-declared daily goals with streak gauges, 14-night sleep
+  debt, and acute:chronic training load (ACWR) with a "ramping too fast"
+  alert.
 - **Weekly report & notifications** — Monday-morning week-over-week summary
   with push delivery via ntfy or Telegram.
 - **Three ingestion paths** — Health Auto Export app, plain Apple Shortcut,
@@ -180,6 +184,9 @@ pulseboard/            the Python package
 ├── db.py              SQLite schema + idempotent upsert + queries
 ├── exporter.py        custom prometheus_client Collector
 ├── score.py           0-100 composite health score
+├── readiness.py       0-100 morning readiness score (recovery inputs only)
+├── goals.py           daily goal streaks + weekly hit counts + sleep debt
+├── training_load.py   acute:chronic workout-load ratio (ACWR)
 ├── insights.py        correlations + baseline anomaly z-scores
 ├── report.py          weekly report CLI (markdown/HTML, --notify, --loop)
 ├── notify.py          ntfy / Telegram push (stdlib urllib)
@@ -191,7 +198,7 @@ prometheus/            scrape config
 deploy/helm/           Helm chart for home-lab Kubernetes (docs/K8S.md)
 grafana/               provisioned datasources + dashboard JSON
 samples/               synthetic payloads & export.xml used by the tests
-docs/                  INGEST, SHORTCUT, INSIGHTS, REPORTS, SCORE, OBSERVABILITY, ALERTING, K8S, ROADMAP
+docs/                  INGEST, SHORTCUT, INSIGHTS, REPORTS, SCORE, GOALS, TRAINING_LOAD, OBSERVABILITY, ALERTING, K8S, ROADMAP
 ```
 
 ## Development
