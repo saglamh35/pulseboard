@@ -7,22 +7,25 @@ code, stdlib-lean, "not medical advice") apply to all of them.
 
 ## Near-term, builds directly on existing modules
 
-- **Readiness score** — a morning "how recovered am I?" 0–100 composite from
-  HRV vs baseline, resting HR vs baseline, and last night's sleep — the same
-  renormalized-weights pattern as `score.py`, exposed as a gauge and a
-  dashboard stat with a matching alert.
-- **Goals & streaks** — per-metric daily goals (steps ≥ 8000, sleep ≥ 7 h)
-  declared in the metric registry; `pulseboard_goal_streak_days{metric=}`
-  gauges, weekly-report "goals hit 5/7" lines, and a dashboard row.
-- **Sleep debt** — cumulative shortfall vs target over the last 14 days,
-  as a gauge + trend panel; pairs naturally with the existing sleep alerts.
-- **Training load (ACWR)** — acute (7 d) vs chronic (28 d) workout-load
-  ratio from the existing workout rollups; warn above ~1.5 ("ramping too
-  fast"), a classic overtraining signal.
+- ~~**Readiness score**~~ — **shipped**: `pulseboard_readiness_score` gauge,
+  dashboard gauge and `pb-readiness-low` alert ([SCORE.md](SCORE.md)).
+- ~~**Goals & streaks**~~ — **shipped**: registry-declared goals,
+  `pulseboard_goal_streak_days{metric=}` / `pulseboard_goal_target{metric=}`
+  gauges, weekly-report "met N/7 days" lines and a dashboard panel
+  ([GOALS.md](GOALS.md)).
+- ~~**Sleep debt**~~ — **shipped**: `pulseboard_sleep_debt_hours` gauge,
+  report line, dashboard stat and `pb-sleep-debt-high` alert
+  ([GOALS.md](GOALS.md)).
+- ~~**Training load (ACWR)**~~ — **shipped**: acute/chronic/ACWR gauges from
+  the per-workout table, dashboard stat and `pb-acwr-high` alert
+  ([TRAINING_LOAD.md](TRAINING_LOAD.md)).
 - **AI weekly narrative** — pipe the weekly report's numbers through the
   Claude API to generate a short natural-language coach summary appended to
   the markdown/HTML report (opt-in, API key via env, raw data never leaves
   the machine otherwise).
+- **Persist derived daily scores** — store health/readiness per day so the
+  weekly report can compare them week-over-week (today they are computed
+  live from latest values only).
 
 ## Medium — new surfaces
 
