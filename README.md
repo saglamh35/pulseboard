@@ -163,13 +163,21 @@ correlation is not causation):
 
 ![Insights row — z-scores, correlations, scatters](docs/img/insights.png)
 
-A final row drills deeper: **sleep stages per night** (core/deep/REM/awake,
-stacked) and a **recent workouts table** fed by a per-session `workouts`
-table that every ingestion path fills alongside the daily rollups.
+A **Sleep & workouts** row drills deeper: **sleep stages per night**
+(core/deep/REM/awake, stacked) and a **recent workouts table** fed by a
+per-session `workouts` table that every ingestion path fills alongside the
+daily rollups.
+
+**Recovery & goals** closes the dashboard: a morning **readiness** gauge,
+**sleep debt** over the last 14 nights, the acute:chronic **training-load
+ratio (ACWR)** and per-goal **streak** bars
+([docs/GOALS.md](docs/GOALS.md),
+[docs/TRAINING_LOAD.md](docs/TRAINING_LOAD.md)).
 
 Provisioned **Grafana alert rules** watch the derived gauges — resting HR
-rising 3+ days, sleep/steps averages dipping, data staleness, and
-baseline anomalies ([docs/ALERTING.md](docs/ALERTING.md)).
+rising 3+ days, sleep/steps averages dipping, data staleness, baseline
+anomalies, low readiness, high sleep debt, and training load ramping past
+1.5× ([docs/ALERTING.md](docs/ALERTING.md)).
 
 ## Weekly report & notifications
 
