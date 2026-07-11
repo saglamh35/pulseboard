@@ -1,3 +1,8 @@
+# Env files can hold API keys — this repo is public, never commit them
+.env
+.env.*
+!.env.example
+
 # Real health data must never be committed
 export.xml
 export.zip
