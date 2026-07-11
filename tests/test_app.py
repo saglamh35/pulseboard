@@ -163,6 +163,58 @@ class TestWeeklyReportEndpoint:
         assert client.get("/report/weekly?format=pdf").status_code == 422
 
 
+class TestCoachEndpoints:
+    def _seed(self, client):
+        client.post(
+            "/ingest",
+            json={
+                "date": "2026-07-09",
+                "metrics": [{"name": "steps", "value": 8250}, {"name": "sleep_hours", "value": 7.4}],
+            },
+        )
+
+    def test_coach_prompt_needs_no_provider(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("PULSEBOARD_AI_PROVIDER", raising=False)
+        client = make_client(tmp_path)
+        self._seed(client)
+        response = client.get("/coach/prompt")
+        assert response.status_code == 200
+        assert "not medical advice" in response.text
+        assert "goals for next week" in response.text
+
+    def test_coach_prompt_json_has_links(self, tmp_path):
+        client = make_client(tmp_path)
+        self._seed(client)
+        body = client.get("/coach/prompt?format=json").json()
+        assert body["links"]["claude"].startswith("https://claude.ai/new?q=")
+        assert body["links"]["chatgpt"].startswith("https://chatgpt.com/?q=")
+        assert "not medical advice" in body["prompt"]
+
+    def test_weekly_report_makes_no_llm_call_by_default(self, tmp_path, monkeypatch):
+        import pulseboard.coach as coach
+        from tests.test_coach import FakeUrlopen
+
+        faked = FakeUrlopen({"response": "hi"})
+        monkeypatch.setattr(coach.urllib.request, "urlopen", faked)
+        monkeypatch.setenv("PULSEBOARD_AI_PROVIDER", "ollama")
+        client = make_client(tmp_path)
+        self._seed(client)
+        assert client.get("/report/weekly").status_code == 200
+        assert faked.requests == []
+
+    def test_weekly_report_coach_opt_in(self, tmp_path, monkeypatch):
+        import pulseboard.coach as coach
+        from tests.test_coach import FakeUrlopen
+
+        monkeypatch.setattr(coach.urllib.request, "urlopen", FakeUrlopen({"response": "Solid week."}))
+        monkeypatch.setenv("PULSEBOARD_AI_PROVIDER", "ollama")
+        client = make_client(tmp_path)
+        self._seed(client)
+        text = client.get("/report/weekly?coach=1").text
+        assert "## Coach (AI)" in text
+        assert "Solid week." in text
+
+
 class TestIngestGuards:
     def test_oversized_body_is_413(self, tmp_path):
         client = make_client(tmp_path)
