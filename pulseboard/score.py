@@ -19,11 +19,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pulseboard.metrics import REGISTRY
+
 if TYPE_CHECKING:
     from pulseboard.db import Database
 
+# The 8 h sleep target is the score's *ideal* (partial credit up to 8 h) and
+# is deliberately separate from the registry's >= 7 h daily sleep *goal*.
 SLEEP_TARGET_HOURS = 8.0
-STEPS_GOAL = 8000.0
+_steps_goal = REGISTRY["steps"].goal
+assert _steps_goal is not None
+STEPS_GOAL = _steps_goal.value
 RESTING_HR_TOLERANCE_BPM = 15.0
 BASELINE_DAYS = 30
 

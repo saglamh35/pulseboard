@@ -11,12 +11,24 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class Goal:
+    """A daily goal for a metric (e.g. steps >= 8000)."""
+
+    value: float
+    direction: str  # "at_least" | "at_most"
+
+    def met(self, actual: float) -> bool:
+        return actual >= self.value if self.direction == "at_least" else actual <= self.value
+
+
+@dataclass(frozen=True)
 class MetricDef:
     name: str  # canonical name, used as the `metric` column in SQLite
     unit: str
     aggregations: tuple[str, ...]  # allowed aggregations; first one is the default
     prom_name: str  # Prometheus gauge name
     description: str
+    goal: Goal | None = None  # optional daily goal (streaks, weekly report, sleep debt)
 
     @property
     def default_aggregation(self) -> str:
@@ -25,7 +37,7 @@ class MetricDef:
 
 _DEFS: tuple[MetricDef, ...] = (
     # Activity (daily cumulative sums)
-    MetricDef("steps", "count", ("sum",), "pulseboard_steps", "Daily step count"),
+    MetricDef("steps", "count", ("sum",), "pulseboard_steps", "Daily step count", goal=Goal(8000, "at_least")),
     MetricDef(
         "distance_walking_running",
         "km",
@@ -37,7 +49,12 @@ _DEFS: tuple[MetricDef, ...] = (
     MetricDef("active_energy", "kcal", ("sum",), "pulseboard_active_energy_kcal", "Daily active energy burned"),
     MetricDef("basal_energy", "kcal", ("sum",), "pulseboard_basal_energy_kcal", "Daily basal (resting) energy burned"),
     MetricDef(
-        "apple_exercise_time", "min", ("sum",), "pulseboard_apple_exercise_time_min", "Daily Apple exercise minutes"
+        "apple_exercise_time",
+        "min",
+        ("sum",),
+        "pulseboard_apple_exercise_time_min",
+        "Daily Apple exercise minutes",
+        goal=Goal(30, "at_least"),
     ),
     MetricDef("apple_stand_hours", "count", ("sum",), "pulseboard_apple_stand_hours", "Daily Apple stand hours"),
     # Heart (min/avg/max within the day, or one daily value)
@@ -64,7 +81,14 @@ _DEFS: tuple[MetricDef, ...] = (
     MetricDef("respiratory_rate", "breaths/min", ("avg",), "pulseboard_respiratory_rate", "Daily respiratory rate"),
     MetricDef("vo2_max", "mL/kg/min", ("latest",), "pulseboard_vo2_max", "Most recent VO2 max estimate"),
     # Sleep (total + per-stage breakdown; stages sum to sleep_hours, awake excluded)
-    MetricDef("sleep_hours", "h", ("sum",), "pulseboard_sleep_hours", "Hours asleep for the night ending that day"),
+    MetricDef(
+        "sleep_hours",
+        "h",
+        ("sum",),
+        "pulseboard_sleep_hours",
+        "Hours asleep for the night ending that day",
+        goal=Goal(7.0, "at_least"),
+    ),
     MetricDef("sleep_core_hours", "h", ("sum",), "pulseboard_sleep_core_hours", "Core (light) sleep hours"),
     MetricDef("sleep_deep_hours", "h", ("sum",), "pulseboard_sleep_deep_hours", "Deep sleep hours"),
     MetricDef("sleep_rem_hours", "h", ("sum",), "pulseboard_sleep_rem_hours", "REM sleep hours"),
