@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import ValidationError
 
 import pulseboard
-from pulseboard.db import Database
+from pulseboard.db import Database, MetricRecord
 from pulseboard.exporter import build_metrics_app
 from pulseboard.ingest.adapters.health_auto_export import extract_workouts, is_hae_payload, normalize_hae
 from pulseboard.ingest.canonical import CanonicalPayload, normalize
@@ -42,6 +42,32 @@ def _require_token(request: Request) -> None:
     supplied = request.headers.get("authorization", "")
     if supplied != f"Bearer {token}":
         raise HTTPException(status_code=401, detail="Missing or invalid bearer token")
+
+
+def _workout_rollup_records(db: Database, dates: list[str], source: str) -> list[MetricRecord]:
+    """Daily workouts_* rollup rows recomputed from the workouts table.
+
+    Recomputing from the DB (not the payload) keeps re-ingests idempotent —
+    a day's workouts can arrive spread across several POSTs.
+    """
+    records: list[MetricRecord] = []
+    for row in db.workout_rollups_for_dates(dates):
+        for metric, value in (
+            ("workouts_count", float(row["count"])),
+            ("workouts_duration_min", float(row["duration_min"] or 0.0)),
+            ("workouts_energy_kcal", float(row["energy_kcal"] or 0.0)),
+        ):
+            records.append(
+                MetricRecord(
+                    date=row["date"],
+                    metric=metric,
+                    value=round(value, 2),
+                    unit=REGISTRY[metric].unit,
+                    aggregation="sum",
+                    source=source,
+                )
+            )
+    return records
 
 
 def create_app(db_path: str | None = None) -> FastAPI:
@@ -124,6 +150,9 @@ def create_app(db_path: str | None = None) -> FastAPI:
             records, skipped = normalize(canonical)
         stored = db.upsert_records(records)
         workouts_stored = db.upsert_workouts(workouts) if workouts else 0
+        if workouts:
+            affected_dates = sorted({w.date for w in workouts})
+            db.upsert_records(_workout_rollup_records(db, affected_dates, source))
         latest_date = max((r.date for r in records), default=None)
         logger.info(
             "ingest source=%s stored=%d skipped=%d workouts=%d latest_date=%s",
