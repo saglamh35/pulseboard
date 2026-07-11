@@ -213,6 +213,24 @@ class Database:
             (limit,),
         ).fetchall()
 
+    def workout_rollups_for_dates(self, dates: list[str]) -> list[sqlite3.Row]:
+        """Per-date COUNT/SUM(duration_min)/SUM(energy_kcal) from the
+        workouts table — the source of truth for the daily rollup metrics."""
+        if not dates:
+            return []
+        placeholders = ",".join("?" for _ in dates)
+        return self._conn.execute(
+            f"""
+            SELECT date, COUNT(*) AS count, SUM(duration_min) AS duration_min, SUM(energy_kcal) AS energy_kcal
+            FROM workouts WHERE date IN ({placeholders}) GROUP BY date
+            """,
+            dates,
+        ).fetchall()
+
+    def earliest_workout_date(self) -> str | None:
+        row = self._conn.execute("SELECT MIN(date) FROM workouts").fetchone()
+        return row[0] if row and row[0] is not None else None
+
     def count_workouts(self) -> int:
         return int(self._conn.execute("SELECT COUNT(*) FROM workouts").fetchone()[0])
 
