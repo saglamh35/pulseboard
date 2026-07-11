@@ -84,7 +84,21 @@ class TestBuildWeeklyReport:
         db = Database(str(tmp_path / "test.db"))
         report = build_weekly_report(db, week_ending=THIS_MONDAY)
         assert all(c.this_week is None for c in report.comparisons)
+        assert report.goals == []
+        assert report.sleep_debt_hours is None
         assert report.freshness_seconds is None
+
+    def test_goal_lines_and_sleep_debt(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        seed_two_weeks(db)  # this week: 12000 steps/day (goal met), 6 h sleep (goal missed)
+        report = build_weekly_report(db, week_ending=THIS_MONDAY)
+        by_label = {g.label: g for g in report.goals}
+        steps = by_label["Steps ≥ 8000"]
+        assert (steps.met_days, steps.days_with_data) == (7, 7)
+        sleep = by_label["Sleep hours ≥ 7 h"]
+        assert (sleep.met_days, sleep.days_with_data) == (0, 7)
+        # 7 nights at 8 h (no debt) + 7 nights at 6 h (1 h each)
+        assert report.sleep_debt_hours == 7.0
 
 
 class TestRendering:
@@ -95,12 +109,23 @@ class TestRendering:
         assert "| Steps | 84,000 | 70,000 | ▲ +20.0% | 7 |" in text
         assert "not medical advice" in text
 
+    def test_markdown_goals_section(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        seed_two_weeks(db)
+        text = render_markdown(build_weekly_report(db, week_ending=THIS_MONDAY))
+        assert "## Goals" in text
+        assert "- Steps ≥ 8000: met 7/7 days (streak: 14 days)" in text
+        assert "- Sleep hours ≥ 7 h: met 0/7 days" in text
+        assert "- Sleep debt (last 14 nights): 7 h vs the 7 h goal" in text
+
     def test_html_contains_table_and_disclaimer(self, tmp_path):
         db = Database(str(tmp_path / "test.db"))
         seed_two_weeks(db)
         html = render_html(build_weekly_report(db, week_ending=THIS_MONDAY))
         assert "<table" in html
         assert "84,000" in html
+        assert "<h2>Goals</h2>" in html
+        assert "Steps ≥ 8000: met 7/7 days" in html
         assert "not medical advice" in html
 
     def test_notification_summary_is_short(self, tmp_path):
