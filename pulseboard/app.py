@@ -17,13 +17,14 @@ from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import ValidationError
 
 import pulseboard
+from pulseboard.coach import coach_prompt, prompt_links
 from pulseboard.db import Database, MetricRecord
 from pulseboard.exporter import build_metrics_app
 from pulseboard.ingest.adapters.health_auto_export import extract_workouts, is_hae_payload, normalize_hae
 from pulseboard.ingest.canonical import CanonicalPayload, normalize
 from pulseboard.insights import insights_summary
 from pulseboard.metrics import REGISTRY
-from pulseboard.report import build_weekly_report, render_html, render_markdown
+from pulseboard.report import build_weekly_report, render_html, render_markdown, with_coach
 
 logger = logging.getLogger(__name__)
 
@@ -112,14 +113,34 @@ def create_app(db_path: str | None = None) -> FastAPI:
         return insights_summary(db)
 
     @app.get("/report/weekly")
-    def weekly_report(format: str = "md"):
-        """Current week-to-date report, built on the fly."""
+    def weekly_report(format: str = "md", coach: int = 0):
+        """Current week-to-date report, built on the fly.
+
+        ?coach=1 additionally asks the env-configured AI provider for a
+        summary — opt-in per request because a local model can take a
+        minute; the weekly CLI/cron path adds it automatically instead."""
         if format not in ("md", "html"):
             raise HTTPException(status_code=422, detail="format must be 'md' or 'html'")
         report = build_weekly_report(db)
+        # One big-picture digest serves both the LLM call and the HTML links.
+        ask_prompt = coach_prompt(report, db) if (coach or format == "html") else None
+        if coach:
+            report = with_coach(report, db, prompt=ask_prompt)
         if format == "html":
-            return HTMLResponse(render_html(report))
+            return HTMLResponse(render_html(report, ask_prompt=ask_prompt))
         return PlainTextResponse(render_markdown(report), media_type="text/markdown")
+
+    @app.get("/coach/prompt")
+    def coach_prompt_endpoint(format: str = "text"):
+        """The ready-to-paste big-picture prompt for any chat AI — the
+        no-API-key phone path. Requires no provider config and makes no
+        LLM call; data leaves the machine only if you paste or tap."""
+        if format not in ("text", "json"):
+            raise HTTPException(status_code=422, detail="format must be 'text' or 'json'")
+        prompt = coach_prompt(build_weekly_report(db), db)
+        if format == "json":
+            return {"prompt": prompt, "links": prompt_links(prompt)}
+        return PlainTextResponse(prompt)
 
     @app.post("/ingest")
     async def ingest(request: Request) -> dict[str, object]:

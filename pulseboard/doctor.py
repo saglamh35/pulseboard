@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -143,6 +144,51 @@ def check_api(base_url: str) -> list[CheckResult]:
     return results
 
 
+def check_ai() -> list[CheckResult]:
+    """AI coach configuration (optional feature). Reports key PRESENCE only —
+    never a key value; this repo's docs assume public hosting."""
+    from pulseboard.coach import DEFAULT_MODELS, KEY_ENV_VARS, PROVIDERS
+
+    provider = os.environ.get("PULSEBOARD_AI_PROVIDER", "").strip().lower()
+    if not provider:
+        return [CheckResult("AI coach", True, "not configured (optional; set PULSEBOARD_AI_PROVIDER)")]
+    if provider not in PROVIDERS:
+        return [
+            CheckResult(
+                "AI coach",
+                False,
+                f"unknown provider {provider!r}",
+                f"PULSEBOARD_AI_PROVIDER must be one of: {', '.join(PROVIDERS)}. See docs/AI_COACH.md.",
+            )
+        ]
+
+    model = os.environ.get("PULSEBOARD_AI_MODEL") or DEFAULT_MODELS[provider]
+    if provider == "ollama":
+        base = os.environ.get("PULSEBOARD_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+        ok, detail = _probe(f"{base}/api/tags")
+        return [
+            CheckResult(
+                "AI coach",
+                ok,
+                f"ollama reachable at {base}, model {model}" if ok else detail,
+                "Start Ollama (ollama serve, or docker compose --profile ai up -d) and pull the model: "
+                f"ollama pull {model}. See docs/AI_COACH.md.",
+            )
+        ]
+
+    key_vars = KEY_ENV_VARS[provider]
+    has_key = any(os.environ.get(var) for var in key_vars)
+    return [
+        CheckResult(
+            "AI coach",
+            has_key,
+            f"{provider} configured (API key set), model {model}" if has_key else f"{provider}: API key NOT set",
+            f"Set {key_vars[0]} (or one of: {', '.join(key_vars[1:])}) in the environment — "
+            "never commit it; see docs/AI_COACH.md.",
+        )
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m pulseboard.doctor",
@@ -155,6 +201,7 @@ def main(argv: list[str] | None = None) -> int:
     results = check_database(args.db or resolve_db_path())
     if args.url:
         results += check_api(args.url)
+    results += check_ai()
 
     failures = 0
     for result in results:

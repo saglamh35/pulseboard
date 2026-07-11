@@ -75,6 +75,13 @@ class TestQueries:
         dates = [row["date"] for row in db.history("steps")]
         assert dates == ["2026-07-01", "2026-07-02", "2026-07-03"]
 
+    def test_history_date_window_is_inclusive(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        for day in ("2026-07-01", "2026-07-02", "2026-07-03", "2026-07-04"):
+            db.upsert_records([make_record(date=day)])
+        rows = db.history("steps", "sum", start="2026-07-02", end="2026-07-03")
+        assert [row["date"] for row in rows] == ["2026-07-02", "2026-07-03"]
+
     def test_history_days_limit_keeps_most_recent(self, tmp_path):
         db = Database(str(tmp_path / "test.db"))
         db.upsert_records([make_record(date=f"2026-07-0{i}") for i in range(1, 6)])

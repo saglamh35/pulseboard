@@ -8,6 +8,15 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - pulseboard-data:/data
+    environment:
+      # Optional AI coach (docs/AI_COACH.md). Values come from the host env or
+      # a git-ignored .env file — never hardcode API keys here.
+      - PULSEBOARD_AI_PROVIDER=${PULSEBOARD_AI_PROVIDER:-}
+      - PULSEBOARD_AI_MODEL=${PULSEBOARD_AI_MODEL:-}
+      - PULSEBOARD_OLLAMA_URL=${PULSEBOARD_OLLAMA_URL:-http://ollama:11434}
+      - PULSEBOARD_ANTHROPIC_API_KEY=${PULSEBOARD_ANTHROPIC_API_KEY:-}
+      - PULSEBOARD_OPENAI_API_KEY=${PULSEBOARD_OPENAI_API_KEY:-}
+      - PULSEBOARD_GEMINI_API_KEY=${PULSEBOARD_GEMINI_API_KEY:-}
     restart: unless-stopped
 
   prometheus:
@@ -59,9 +68,31 @@ services:
       - PULSEBOARD_NTFY_TOKEN=${PULSEBOARD_NTFY_TOKEN:-}
       - PULSEBOARD_TELEGRAM_BOT_TOKEN=${PULSEBOARD_TELEGRAM_BOT_TOKEN:-}
       - PULSEBOARD_TELEGRAM_CHAT_ID=${PULSEBOARD_TELEGRAM_CHAT_ID:-}
+      # Optional AI coach section in the weekly report (docs/AI_COACH.md).
+      - PULSEBOARD_AI_PROVIDER=${PULSEBOARD_AI_PROVIDER:-}
+      - PULSEBOARD_AI_MODEL=${PULSEBOARD_AI_MODEL:-}
+      - PULSEBOARD_OLLAMA_URL=${PULSEBOARD_OLLAMA_URL:-http://ollama:11434}
+      - PULSEBOARD_ANTHROPIC_API_KEY=${PULSEBOARD_ANTHROPIC_API_KEY:-}
+      - PULSEBOARD_OPENAI_API_KEY=${PULSEBOARD_OPENAI_API_KEY:-}
+      - PULSEBOARD_GEMINI_API_KEY=${PULSEBOARD_GEMINI_API_KEY:-}
+    restart: unless-stopped
+
+  # Optional local LLM for the AI coach: `docker compose --profile ai up -d`,
+  # then pull the model once: `docker compose exec ollama ollama pull gemma3:4b`
+  # and set PULSEBOARD_AI_PROVIDER=ollama. Local-first: health data never
+  # leaves the machine. See docs/AI_COACH.md.
+  ollama:
+    image: ollama/ollama:0.9.6
+    container_name: pulseboard-ollama
+    profiles: ["ai"]
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
     restart: unless-stopped
 
 volumes:
   pulseboard-data:
   prometheus-data:
   grafana-data:
+  ollama-models:

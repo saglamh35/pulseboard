@@ -47,10 +47,16 @@ spec:
               env:
                 - name: PULSEBOARD_DB_PATH
                   value: /data/pulseboard.db
-              {{- with .Values.report.notifySecret }}
+              {{- if or .Values.report.notifySecret .Values.report.aiSecret }}
               envFrom:
+                {{- with .Values.report.notifySecret }}
                 - secretRef:
                     name: {{ . | quote }}
+                {{- end }}
+                {{- with .Values.report.aiSecret }}
+                - secretRef:
+                    name: {{ . | quote }}
+                {{- end }}
               {{- end }}
               resources:
                 {{- toYaml .Values.report.resources | nindent 16 }}

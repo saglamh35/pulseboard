@@ -41,6 +41,11 @@ report:
   enabled: false
   schedule: "0 8 * * 1" # Monday 08:00
   notifySecret: "" # name of a Secret with the PULSEBOARD_* notification keys
+  # Optional AI coach config (docs/AI_COACH.md): name of a Secret holding
+  # PULSEBOARD_AI_PROVIDER, PULSEBOARD_AI_MODEL, PULSEBOARD_OLLAMA_URL and/or
+  # one PULSEBOARD_*_API_KEY. Kept separate from notifySecret so the two can
+  # be rotated/owned independently; both may be set.
+  aiSecret: ""
   resources:
     requests: { cpu: 50m, memory: 64Mi }
     limits: { memory: 128Mi }
