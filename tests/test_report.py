@@ -163,6 +163,16 @@ class TestRendering:
         assert "<script>" not in html
         assert "&lt;script&gt;" in html
 
+    def test_workout_fields_are_html_escaped(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        seed_two_weeks(db)
+        db.upsert_workouts(
+            [WorkoutRecord("2026-07-07 18:00:00 +0200", "2026-07-07", "<img src=x>", 30.0, 0.0, 0.0, "test")]
+        )
+        html = render_html(build_weekly_report(db, week_ending=THIS_MONDAY))
+        assert "<img src=x>" not in html
+        assert "&lt;img src=x&gt;" in html
+
     def test_html_footer_has_ask_ai_links(self, tmp_path):
         db = Database(str(tmp_path / "test.db"))
         seed_two_weeks(db)

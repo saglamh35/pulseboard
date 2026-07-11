@@ -147,7 +147,7 @@ def check_api(base_url: str) -> list[CheckResult]:
 def check_ai() -> list[CheckResult]:
     """AI coach configuration (optional feature). Reports key PRESENCE only —
     never a key value; this repo's docs assume public hosting."""
-    from pulseboard.coach import DEFAULT_MODELS, PROVIDERS
+    from pulseboard.coach import DEFAULT_MODELS, KEY_ENV_VARS, PROVIDERS
 
     provider = os.environ.get("PULSEBOARD_AI_PROVIDER", "").strip().lower()
     if not provider:
@@ -176,15 +176,15 @@ def check_ai() -> list[CheckResult]:
             )
         ]
 
-    key_var = f"PULSEBOARD_{provider.upper()}_API_KEY"
-    fallbacks = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY", "gemini": "GEMINI_API_KEY"}
-    has_key = bool(os.environ.get(key_var) or os.environ.get(fallbacks[provider]))
+    key_vars = KEY_ENV_VARS[provider]
+    has_key = any(os.environ.get(var) for var in key_vars)
     return [
         CheckResult(
             "AI coach",
             has_key,
             f"{provider} configured (API key set), model {model}" if has_key else f"{provider}: API key NOT set",
-            f"Set {key_var} (or {fallbacks[provider]}) in the environment — never commit it; see docs/AI_COACH.md.",
+            f"Set {key_vars[0]} (or one of: {', '.join(key_vars[1:])}) in the environment — "
+            "never commit it; see docs/AI_COACH.md.",
         )
     ]
 

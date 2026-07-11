@@ -84,10 +84,10 @@ class WeeklyReport:
     coach_summary: CoachSummary | None = None  # attached via with_coach(), never by build
 
 
-def with_coach(report: WeeklyReport, db: Database) -> WeeklyReport:
+def with_coach(report: WeeklyReport, db: Database, prompt: str | None = None) -> WeeklyReport:
     """Attach the env-configured AI coach summary; no-op when unconfigured
     or the provider fails (the report never depends on the LLM)."""
-    summary = generate_coach_summary(report, db)
+    summary = generate_coach_summary(report, db, prompt=prompt)
     return replace(report, coach_summary=summary) if summary else report
 
 
@@ -272,7 +272,7 @@ def render_html(report: WeeklyReport, ask_prompt: str | None = None) -> str:
         for c in report.comparisons
     )
     goal_items = [
-        f"<li>{g.label}: met {g.met_days}/{g.days_with_data} days"
+        f"<li>{html.escape(g.label)}: met {g.met_days}/{g.days_with_data} days"
         + (f" (streak: {g.streak_days} days)" if g.streak_days else "")
         + "</li>"
         for g in report.goals
@@ -280,12 +280,19 @@ def render_html(report: WeeklyReport, ask_prompt: str | None = None) -> str:
     if report.sleep_debt_hours is not None:
         goal_items.append(f"<li>Sleep debt (last {SLEEP_DEBT_DAYS} nights): {report.sleep_debt_hours:g} h</li>")
     goals = "".join(goal_items) or "<li>no goal data yet</li>"
+    # Workout fields come from ingested payloads (external input) — escape them.
     workouts = (
-        "".join(f"<li>{w.date} — {w.activity_type} ({w.duration_min:g} min)</li>" for w in report.workouts)
+        "".join(
+            f"<li>{html.escape(w.date)} — {html.escape(w.activity_type)} ({w.duration_min:g} min)</li>"
+            for w in report.workouts
+        )
         or "<li>none recorded</li>"
     )
     anomalies = (
-        "".join(f"<li>{a.metric} on {a.date}: {a.value:g} (z = {a.zscore:+.1f})</li>" for a in report.anomalies)
+        "".join(
+            f"<li>{html.escape(a.metric)} on {html.escape(a.date)}: {a.value:g} (z = {a.zscore:+.1f})</li>"
+            for a in report.anomalies
+        )
         or "<li>none</li>"
     )
     return f"""<!doctype html>
@@ -349,10 +356,13 @@ def _run_once(args: argparse.Namespace) -> int:
 
         week_ending = date_type.fromisoformat(args.week_ending) if args.week_ending else None
         report = build_weekly_report(db, week_ending)
+        # One big-picture digest serves both the LLM call and the HTML links.
+        needs_prompt = not args.no_coach or args.format == "html"
+        ask_prompt = coach_prompt(report, db) if needs_prompt else None
         if not args.no_coach:
-            report = with_coach(report, db)
+            report = with_coach(report, db, prompt=ask_prompt)
         if args.format == "html":
-            rendered = render_html(report, ask_prompt=coach_prompt(report, db))
+            rendered = render_html(report, ask_prompt=ask_prompt)
         else:
             rendered = render_markdown(report)
 

@@ -8,6 +8,7 @@ and is charted in Grafana directly from there.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Iterator
 
@@ -25,6 +26,8 @@ from pulseboard.trends import ROLLING_DAYS, ROLLING_GAUGES, rising_days, rolling
 
 if TYPE_CHECKING:
     from pulseboard.db import Database
+
+logger = logging.getLogger(__name__)
 
 # Aggregations exposed as an `agg` label on a single gauge (e.g. heart_rate
 # min/avg/max). Single-aggregation metrics get a plain, label-less gauge.
@@ -63,6 +66,22 @@ class PulseboardCollector(Collector):
                 family.add_metric([], metric_rows[0]["value"])
                 yield family
 
+        # Each derived family is guarded: an error in one computation must not
+        # abort the whole scrape (which would also silence the staleness alert).
+        yield from self._guarded(self._score_families())
+        yield from self._guarded(self._goal_families())
+        yield from self._guarded(self._training_load_families())
+        yield from self._guarded(self._trend_families())
+        yield from self._guarded(self._freshness_families())
+        yield from self._guarded(self._insight_families())
+
+    def _guarded(self, families: Iterator[GaugeMetricFamily]) -> Iterator[GaugeMetricFamily]:
+        try:
+            yield from families
+        except Exception:
+            logger.exception("Derived gauge family failed; skipping it for this scrape")
+
+    def _score_families(self) -> Iterator[GaugeMetricFamily]:
         score = compute_health_score(self._db)
         if score is not None:
             score_family = GaugeMetricFamily(
@@ -82,9 +101,7 @@ class PulseboardCollector(Collector):
             readiness_family.add_metric([], readiness)
             yield readiness_family
 
-        yield from self._goal_families()
-        yield from self._training_load_families()
-
+    def _trend_families(self) -> Iterator[GaugeMetricFamily]:
         for metric_name, aggregation, prom_name in ROLLING_GAUGES:
             average = rolling_average(self._db, metric_name, aggregation)
             if average is None:
@@ -102,9 +119,6 @@ class PulseboardCollector(Collector):
             )
             rising_family.add_metric([], rising_days(self._db, "resting_heart_rate", "avg"))
             yield rising_family
-
-        yield from self._freshness_families()
-        yield from self._insight_families()
 
     def _goal_families(self) -> Iterator[GaugeMetricFamily]:
         """Goal streaks, goal targets and sleep debt (docs/GOALS.md)."""

@@ -58,6 +58,14 @@ class TestCheckAi:
             for field in (result.name, result.detail, result.hint):
                 assert secret not in field
 
+    def test_gemini_accepts_google_api_key_fallback(self, monkeypatch):
+        # doctor must accept every fallback the coach dispatcher accepts
+        monkeypatch.setenv("PULSEBOARD_AI_PROVIDER", "gemini")
+        for var in ("PULSEBOARD_GEMINI_API_KEY", "GEMINI_API_KEY"):
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("GOOGLE_API_KEY", "some-key")
+        assert check_ai()[0].ok
+
     def test_cloud_provider_missing_key_fails(self, monkeypatch):
         monkeypatch.setenv("PULSEBOARD_AI_PROVIDER", "openai")
         monkeypatch.delenv("PULSEBOARD_OPENAI_API_KEY", raising=False)

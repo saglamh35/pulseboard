@@ -53,7 +53,7 @@ def goals_met_in_window(db: "Database", metric: str, start: str, end: str) -> tu
     goal = definition.goal
     if goal is None:
         return (0, 0)
-    rows = [row for row in db.history(metric, definition.default_aggregation) if start <= str(row["date"]) <= end]
+    rows = db.history(metric, definition.default_aggregation, start=start, end=end)
     met = sum(1 for row in rows if goal.met(float(row["value"])))
     return (met, len(rows))
 

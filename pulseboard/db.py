@@ -133,13 +133,27 @@ class Database:
             """
         ).fetchall()
 
-    def history(self, metric: str, aggregation: str | None = None, days: int | None = None) -> list[sqlite3.Row]:
-        """Rows for one metric ordered by date ascending; optionally the last N days."""
+    def history(
+        self,
+        metric: str,
+        aggregation: str | None = None,
+        days: int | None = None,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> list[sqlite3.Row]:
+        """Rows for one metric ordered by date ascending; optionally the last
+        N stored days and/or an inclusive [start, end] date window."""
         sql = "SELECT date, value, unit, aggregation, source FROM health_metrics WHERE metric = ?"
         params: list[object] = [metric]
         if aggregation is not None:
             sql += " AND aggregation = ?"
             params.append(aggregation)
+        if start is not None:
+            sql += " AND date >= ?"
+            params.append(start)
+        if end is not None:
+            sql += " AND date <= ?"
+            params.append(end)
         sql += " ORDER BY date DESC"
         if days is not None:
             sql += " LIMIT ?"

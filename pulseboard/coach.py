@@ -51,6 +51,13 @@ DEFAULT_MODELS = {
     "openai": "gpt-5-mini",
     "gemini": "gemini-2.5-flash",
 }
+# Accepted key variables per cloud provider, in priority order. The single
+# source of truth — the dispatcher and the doctor check both read this.
+KEY_ENV_VARS: dict[str, tuple[str, ...]] = {
+    "anthropic": ("PULSEBOARD_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"),
+    "openai": ("PULSEBOARD_OPENAI_API_KEY", "OPENAI_API_KEY"),
+    "gemini": ("PULSEBOARD_GEMINI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"),
+}
 
 _INSTRUCTIONS = (
     "You are a friendly, motivating fitness coach reviewing the personal weekly "
@@ -235,9 +242,15 @@ def _api_key(*names: str) -> str | None:
     return None
 
 
-def generate_coach_summary(report: "WeeklyReport", db: "Database | None" = None) -> CoachSummary | None:
+def generate_coach_summary(
+    report: "WeeklyReport", db: "Database | None" = None, prompt: str | None = None
+) -> CoachSummary | None:
     """Ask the configured provider for a summary; None when unconfigured or
-    on any failure — the report must never fail because the LLM did."""
+    on any failure — the report must never fail because the LLM did.
+
+    Pass `prompt` when the caller already built it (the HTML report reuses
+    the same text for its ask-an-AI links) to avoid recomputing the digest.
+    """
     provider = os.environ.get("PULSEBOARD_AI_PROVIDER", "").strip().lower()
     if not provider:
         logger.debug("AI coach not configured (PULSEBOARD_AI_PROVIDER unset)")
@@ -247,17 +260,13 @@ def generate_coach_summary(report: "WeeklyReport", db: "Database | None" = None)
         return None
 
     model = os.environ.get("PULSEBOARD_AI_MODEL") or DEFAULT_MODELS[provider]
-    prompt = coach_prompt(report, db)
+    prompt = prompt if prompt is not None else coach_prompt(report, db)
     try:
         if provider == "ollama":
             base_url = os.environ.get("PULSEBOARD_OLLAMA_URL", "http://127.0.0.1:11434")
             text = ask_ollama(base_url, model, prompt)
         else:
-            key_vars = {
-                "anthropic": ("PULSEBOARD_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"),
-                "openai": ("PULSEBOARD_OPENAI_API_KEY", "OPENAI_API_KEY"),
-                "gemini": ("PULSEBOARD_GEMINI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"),
-            }[provider]
+            key_vars = KEY_ENV_VARS[provider]
             api_key = _api_key(*key_vars)
             if api_key is None:
                 logger.warning("AI coach: %s selected but %s is not set", provider, key_vars[0])

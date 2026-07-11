@@ -122,10 +122,12 @@ def create_app(db_path: str | None = None) -> FastAPI:
         if format not in ("md", "html"):
             raise HTTPException(status_code=422, detail="format must be 'md' or 'html'")
         report = build_weekly_report(db)
+        # One big-picture digest serves both the LLM call and the HTML links.
+        ask_prompt = coach_prompt(report, db) if (coach or format == "html") else None
         if coach:
-            report = with_coach(report, db)
+            report = with_coach(report, db, prompt=ask_prompt)
         if format == "html":
-            return HTMLResponse(render_html(report, ask_prompt=coach_prompt(report, db)))
+            return HTMLResponse(render_html(report, ask_prompt=ask_prompt))
         return PlainTextResponse(render_markdown(report), media_type="text/markdown")
 
     @app.get("/coach/prompt")
