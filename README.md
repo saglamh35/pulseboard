@@ -30,6 +30,10 @@ on data I actually care about.
   alert.
 - **Weekly report & notifications** — Monday-morning week-over-week summary
   with push delivery via ntfy or Telegram.
+- **AI weekly coach (opt-in)** — a local Ollama model (or Claude/GPT/Gemini
+  via env keys) turns the week's numbers into a short motivating note with
+  goals for next week; plus no-key "Ask Claude / Ask ChatGPT" links and a
+  ready-made prompt endpoint for your phone.
 - **Three ingestion paths** — Health Auto Export app, plain Apple Shortcut,
   or a streaming `export.xml` backfill for years of history.
 - **Setup wizard** — `python -m pulseboard.doctor` checks the whole pipeline
@@ -189,6 +193,7 @@ pulseboard/            the Python package
 ├── training_load.py   acute:chronic workout-load ratio (ACWR)
 ├── insights.py        correlations + baseline anomaly z-scores
 ├── report.py          weekly report CLI (markdown/HTML, --notify, --loop)
+├── coach.py           opt-in AI weekly coach (Ollama default; Claude/GPT/Gemini via env)
 ├── notify.py          ntfy / Telegram push (stdlib urllib)
 ├── doctor.py          setup wizard: end-to-end pipeline checks
 ├── backfill.py        streaming export.xml backfill CLI
@@ -198,7 +203,7 @@ prometheus/            scrape config
 deploy/helm/           Helm chart for home-lab Kubernetes (docs/K8S.md)
 grafana/               provisioned datasources + dashboard JSON
 samples/               synthetic payloads & export.xml used by the tests
-docs/                  INGEST, SHORTCUT, INSIGHTS, REPORTS, SCORE, GOALS, TRAINING_LOAD, OBSERVABILITY, ALERTING, K8S, ROADMAP
+docs/                  INGEST, SHORTCUT, INSIGHTS, REPORTS, SCORE, GOALS, TRAINING_LOAD, AI_COACH, OBSERVABILITY, ALERTING, K8S, ROADMAP
 ```
 
 ## Development

@@ -23,6 +23,15 @@ python -m pulseboard.report --check-freshness --notify  # ...and push a warning
 `GET /report/weekly?format=md|html` serves the same report on the fly from
 the running API.
 
+## AI coach (opt-in)
+
+When `PULSEBOARD_AI_PROVIDER` is set (local Ollama by default), the report
+gains a **Coach (AI)** section — a short big-picture note with gentle goals
+for next week. `--no-coach` skips it on the CLI; on the HTTP endpoint it's
+per-request opt-in via `?coach=1`. The HTML report also carries no-key
+"Ask Claude / Ask ChatGPT" links, and `GET /coach/prompt` serves the raw
+prompt for any chat app. Setup and security notes: [AI_COACH.md](AI_COACH.md).
+
 ## Notifications (ntfy / Telegram)
 
 `pulseboard/notify.py` pushes over plain HTTP — no extra dependencies.

@@ -19,10 +19,9 @@ code, stdlib-lean, "not medical advice") apply to all of them.
 - ~~**Training load (ACWR)**~~ — **shipped**: acute/chronic/ACWR gauges from
   the per-workout table, dashboard stat and `pb-acwr-high` alert
   ([TRAINING_LOAD.md](TRAINING_LOAD.md)).
-- **AI weekly narrative** — pipe the weekly report's numbers through the
-  Claude API to generate a short natural-language coach summary appended to
-  the markdown/HTML report (opt-in, API key via env, raw data never leaves
-  the machine otherwise).
+- ~~**AI weekly narrative**~~ — **shipped** as the AI weekly coach: local
+  Ollama by default, Claude/GPT/Gemini via env keys, plus a no-key
+  `GET /coach/prompt` + deep-link phone path ([AI_COACH.md](AI_COACH.md)).
 - **Persist derived daily scores** — store health/readiness per day so the
   weekly report can compare them week-over-week (today they are computed
   live from latest values only).
