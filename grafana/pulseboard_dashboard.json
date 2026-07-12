@@ -772,8 +772,8 @@
         {
           "refId": "A",
           "queryType": "table",
-          "queryText": "SELECT strftime('%Y-W%W', date) AS week, SUM(value) AS weekly_steps FROM health_metrics WHERE metric = 'steps' AND aggregation = 'sum' GROUP BY week ORDER BY week",
-          "rawQueryText": "SELECT strftime('%Y-W%W', date) AS week, SUM(value) AS weekly_steps FROM health_metrics WHERE metric = 'steps' AND aggregation = 'sum' GROUP BY week ORDER BY week",
+          "queryText": "SELECT strftime('%Y-%m-%d', date, 'weekday 0', '-6 days') AS week, SUM(value) AS weekly_steps FROM health_metrics WHERE metric = 'steps' AND aggregation = 'sum' GROUP BY week ORDER BY week",
+          "rawQueryText": "SELECT strftime('%Y-%m-%d', date, 'weekday 0', '-6 days') AS week, SUM(value) AS weekly_steps FROM health_metrics WHERE metric = 'steps' AND aggregation = 'sum' GROUP BY week ORDER BY week",
           "timeColumns": []
         }
       ],

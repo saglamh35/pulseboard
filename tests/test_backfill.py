@@ -107,6 +107,34 @@ class TestBackfillCli:
         assert main([str(empty), "--db", str(tmp_path / "test.db")]) == 1
 
 
+class TestEntityGuard:
+    def test_entity_declaration_rejected(self, tmp_path):
+        bomb = tmp_path / "bomb.xml"
+        bomb.write_text(
+            '<?xml version="1.0"?>\n'
+            '<!DOCTYPE HealthData [<!ENTITY a "aaaaaaaaaa">]>\n'
+            "<HealthData><Record/></HealthData>"
+        )
+        with pytest.raises(ValueError, match="entities"):
+            parse_export(str(bomb))
+
+    def test_benign_apple_style_doctype_still_parses(self, tmp_path):
+        # Real Apple exports declare a DTD with ELEMENT/ATTLIST only.
+        doc = tmp_path / "ok.xml"
+        doc.write_text(
+            '<?xml version="1.0"?>\n'
+            "<!DOCTYPE HealthData [\n"
+            "<!ELEMENT HealthData (Record*)>\n"
+            "<!ATTLIST Record type CDATA #REQUIRED>\n"
+            "]>\n"
+            '<HealthData><Record type="HKQuantityTypeIdentifierStepCount" '
+            'startDate="2026-07-01 08:00:00 +0000" value="100" unit="count"/></HealthData>'
+        )
+        records, workouts = parse_export(str(doc))
+        assert by_key(records)[("steps", "2026-07-01", "sum")] == 100
+        assert workouts == []
+
+
 class TestSleepStages:
     def test_stage_intervals_feed_stage_metrics(self, records):
         values = by_key(records)

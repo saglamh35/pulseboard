@@ -205,7 +205,3 @@ HAE_TO_CANONICAL: dict[str, str] = {
     # "blood_pressure" is intentionally absent: its points carry systolic/
     # diastolic fields and are split in the HAE adapter, like sleep_analysis.
 }
-
-
-def get_metric(name: str) -> MetricDef | None:
-    return REGISTRY.get(name)

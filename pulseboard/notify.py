@@ -16,12 +16,30 @@ from __future__ import annotations
 import json
 import logging
 import os
+import urllib.error
 import urllib.request
 
 logger = logging.getLogger(__name__)
 
 TELEGRAM_MAX_CHARS = 4096
 _TIMEOUT_SECONDS = 15
+
+
+def _post(request: urllib.request.Request, channel: str) -> None:
+    """POST, translating urllib errors into a sanitized RuntimeError.
+
+    Both channel URLs embed a secret in the path (the ntfy topic; the Telegram
+    bot token, which its API accepts nowhere else), and HTTPError/URLError
+    carry the full URL — letting them propagate would put the secret in logs
+    (report --loop logs exceptions). `from None` keeps the original out of the
+    formatted traceback."""
+    try:
+        with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS):
+            pass
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"{channel} notification failed: HTTP {exc.code} {exc.reason}") from None
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"{channel} notification failed: {exc.reason}") from None
 
 
 def send_ntfy(
@@ -39,8 +57,7 @@ def send_ntfy(
     request.add_header("Priority", priority)
     if token:
         request.add_header("Authorization", f"Bearer {token}")
-    with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS):
-        pass
+    _post(request, "ntfy")
 
 
 def send_telegram(bot_token: str, chat_id: str, text: str) -> None:
@@ -49,8 +66,7 @@ def send_telegram(bot_token: str, chat_id: str, text: str) -> None:
     payload = json.dumps({"chat_id": chat_id, "text": text[:TELEGRAM_MAX_CHARS]}).encode("utf-8")
     request = urllib.request.Request(url, data=payload, method="POST")
     request.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS):
-        pass
+    _post(request, "Telegram")
 
 
 def notify_all(title: str, body: str) -> list[str]:

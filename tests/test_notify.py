@@ -1,4 +1,6 @@
 import json
+import traceback
+import urllib.error
 from contextlib import contextmanager
 
 import pytest
@@ -57,6 +59,46 @@ class TestSendTelegram:
         notify.send_telegram("BOT", "1", "x" * 5000)
         payload = json.loads(fake_urlopen.requests[0].data.decode())
         assert len(payload["text"]) == notify.TELEGRAM_MAX_CHARS
+
+
+class TestErrorSanitization:
+    """urllib errors carry the full URL — which embeds the ntfy topic and the
+    Telegram bot token — so failures must surface without it."""
+
+    @pytest.fixture
+    def failing_urlopen(self, monkeypatch):
+        def raising(request, timeout=None):
+            raise urllib.error.HTTPError(request.full_url, 404, "Not Found", None, None)
+
+        monkeypatch.setattr(notify.urllib.request, "urlopen", raising)
+
+    @staticmethod
+    def assert_sanitized(exc: BaseException, secret: str) -> None:
+        assert secret not in str(exc)
+        # The URL-bearing HTTPError must be kept out of the rendered chain.
+        assert exc.__cause__ is None
+        assert exc.__suppress_context__
+        rendered = "".join(traceback.format_exception(type(exc), exc, None))
+        assert secret not in rendered
+
+    def test_telegram_error_hides_token(self, failing_urlopen):
+        with pytest.raises(RuntimeError) as excinfo:
+            notify.send_telegram("SECRET-TOKEN", "1", "hi")
+        assert "404" in str(excinfo.value)
+        self.assert_sanitized(excinfo.value, "SECRET-TOKEN")
+
+    def test_ntfy_error_hides_topic(self, failing_urlopen):
+        with pytest.raises(RuntimeError) as excinfo:
+            notify.send_ntfy("https://ntfy.sh", "secret-topic", "t", "b")
+        self.assert_sanitized(excinfo.value, "secret-topic")
+
+    def test_url_error_is_sanitized_too(self, monkeypatch):
+        def raising(request, timeout=None):
+            raise urllib.error.URLError("connection refused")
+
+        monkeypatch.setattr(notify.urllib.request, "urlopen", raising)
+        with pytest.raises(RuntimeError, match="connection refused"):
+            notify.send_telegram("SECRET-TOKEN", "1", "hi")
 
 
 class TestNotifyAll:

@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 from collections import defaultdict
 from datetime import datetime
+from typing import BinaryIO
 from xml.etree.ElementTree import iterparse
 
 from pulseboard.db import Database, MetricRecord, WorkoutRecord
@@ -46,8 +48,42 @@ _MINDFUL_TYPE = "HKCategoryTypeIdentifierMindfulSession"
 _APPLE_TS_FORMAT = "%Y-%m-%d %H:%M:%S %z"
 
 
+class _EntityDeclGuard:
+    """Binary-file wrapper that rejects XML entity declarations.
+
+    ElementTree expands internal DTD entities, so a crafted export.xml could
+    mount an entity-expansion (billion laughs) attack. Real Apple exports
+    carry a DOCTYPE with only ELEMENT/ATTLIST declarations — never ENTITY —
+    and in well-formed XML the byte sequence ``<!ENTITY`` cannot appear
+    outside the DTD (a literal ``<`` is illegal in text and attribute
+    values), so scanning the raw bytes is a safe, stdlib-only guard."""
+
+    _PATTERN = b"<!ENTITY"
+
+    def __init__(self, fileobj: BinaryIO) -> None:
+        self._file = fileobj
+        self._tail = b""  # carry-over so the pattern can't hide across a chunk boundary
+
+    def read(self, size: int = -1) -> bytes:
+        chunk = self._file.read(size)
+        window = self._tail + chunk
+        if self._PATTERN in window:
+            raise ValueError("export.xml declares XML entities; refusing to parse (entity-expansion risk)")
+        self._tail = window[-(len(self._PATTERN) - 1) :]
+        return chunk
+
+
 def _parse_ts(raw: str) -> datetime:
     return datetime.strptime(raw, _APPLE_TS_FORMAT)
+
+
+def _parse_finite(raw: str) -> float | None:
+    """float() that treats non-finite values ("nan", "inf") as unparseable."""
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    return value if math.isfinite(value) else None
 
 
 def _convert_value(canonical: str, value: float, unit: str) -> float:
@@ -161,9 +197,8 @@ def _handle_record(elem, agg: _Aggregator) -> None:
     canonical = HEALTHKIT_TO_CANONICAL.get(record_type)
     if canonical is None:
         return
-    try:
-        value = float(elem.get("value", ""))
-    except ValueError:
+    value = _parse_finite(elem.get("value", ""))
+    if value is None:
         return
     agg.add(canonical, start[:10], start, _convert_value(canonical, value, elem.get("unit", "")))
 
@@ -174,26 +209,17 @@ def _handle_workout(elem, agg: _Aggregator) -> None:
         return
     day = start[:10]
     agg.add("workouts_count", day, start, 1.0)
-    try:
-        duration = float(elem.get("duration", ""))
-    except ValueError:
-        duration = 0.0
+    duration = _parse_finite(elem.get("duration", "")) or 0.0
     if elem.get("durationUnit", "min") == "s":
         duration /= 60.0
     if duration:
         agg.add("workouts_duration_min", day, start, duration)
-    try:
-        energy = float(elem.get("totalEnergyBurned", ""))
-    except ValueError:
-        energy = 0.0
+    energy = _parse_finite(elem.get("totalEnergyBurned", "")) or 0.0
     if energy:
         unit = elem.get("totalEnergyBurnedUnit", "kcal")
         energy = _convert_value("workouts_energy_kcal", energy, unit)
         agg.add("workouts_energy_kcal", day, start, energy)
-    try:
-        distance = float(elem.get("totalDistance", ""))
-    except ValueError:
-        distance = 0.0
+    distance = _parse_finite(elem.get("totalDistance", "")) or 0.0
     if elem.get("totalDistanceUnit", "km") == "mi":
         distance *= 1.609344
     activity = elem.get("workoutActivityType", "Unknown").removeprefix("HKWorkoutActivityType")
@@ -213,19 +239,20 @@ def _handle_workout(elem, agg: _Aggregator) -> None:
 def parse_export(path: str) -> tuple[list[MetricRecord], list[WorkoutRecord]]:
     """Stream export.xml and return (daily metric records, per-workout rows)."""
     agg = _Aggregator()
-    context = iterparse(path, events=("start", "end"))
-    _, root = next(context)  # grab the document root so processed children can be dropped
-    for event, elem in context:
-        if event != "end":
-            continue
-        if elem.tag == "Record":
-            _handle_record(elem, agg)
-        elif elem.tag == "Workout":
-            _handle_workout(elem, agg)
-        else:
-            continue
-        elem.clear()
-        root.clear()
+    with open(path, "rb") as fileobj:
+        context = iterparse(_EntityDeclGuard(fileobj), events=("start", "end"))
+        _, root = next(context)  # grab the document root so processed children can be dropped
+        for event, elem in context:
+            if event != "end":
+                continue
+            if elem.tag == "Record":
+                _handle_record(elem, agg)
+            elif elem.tag == "Workout":
+                _handle_workout(elem, agg)
+            else:
+                continue
+            elem.clear()
+            root.clear()
     return agg.to_records(), agg.workouts
 
 

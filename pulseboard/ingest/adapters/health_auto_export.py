@@ -9,6 +9,7 @@ canonical metric registry; unknown metric names are skipped, never an error.
 from __future__ import annotations
 
 import logging
+import math
 from datetime import date as date_type
 
 from pulseboard.db import MetricRecord, WorkoutRecord
@@ -42,16 +43,22 @@ def _parse_date(raw: object) -> str | None:
 
 
 def _get_number(point: dict, *keys: str) -> float | None:
+    """First finite number under any of the keys; NaN/Infinity are treated
+    like missing values (json.loads lets those literals through)."""
     for key in keys:
         value = point.get(key)
         if isinstance(value, (int, float)) and not isinstance(value, bool):
-            return float(value)
+            if math.isfinite(value):
+                return float(value)
+            continue
         # HAE/Shortcut payloads sometimes stringify quantities ("8250").
         if isinstance(value, str):
             try:
-                return float(value)
+                parsed = float(value)
             except ValueError:
                 continue
+            if math.isfinite(parsed):
+                return parsed
     return None
 
 
@@ -148,7 +155,7 @@ def _quantity(entry: dict, *keys: str) -> float:
         value = entry.get(key)
         if isinstance(value, dict):
             value = value.get("qty")
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
             return float(value)
     return 0.0
 

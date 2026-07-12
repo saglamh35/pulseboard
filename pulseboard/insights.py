@@ -131,10 +131,7 @@ def aligned_pairs(db: "Database", pair: CorrelationPair, days: int = WINDOW_DAYS
     return pairs
 
 
-def correlation(db: "Database", pair: CorrelationPair) -> tuple[float, int] | None:
-    """(pearson r, sample count) over the window; None below MIN_SAMPLES or
-    when a series is constant."""
-    pairs = aligned_pairs(db, pair)
+def _correlation_from_pairs(pairs: list[tuple[float, float]]) -> tuple[float, int] | None:
     if len(pairs) < MIN_SAMPLES:
         return None
     r = pearson([a for a, _ in pairs], [b for _, b in pairs])
@@ -143,11 +140,15 @@ def correlation(db: "Database", pair: CorrelationPair) -> tuple[float, int] | No
     return round(r, 3), len(pairs)
 
 
-def zscore_latest(db: "Database", metric: str, aggregation: str, baseline_days: int = BASELINE_DAYS) -> float | None:
-    """Latest day's value vs. the mean/stdev of the prior baseline days
-    (latest excluded); None with <MIN_BASELINE_DAYS of baseline or zero
-    variance."""
-    rows = db.history(metric, aggregation, days=baseline_days + 1)
+def correlation(db: "Database", pair: CorrelationPair) -> tuple[float, int] | None:
+    """(pearson r, sample count) over the window; None below MIN_SAMPLES or
+    when a series is constant."""
+    return _correlation_from_pairs(aligned_pairs(db, pair))
+
+
+def _zscore_from_rows(rows: list) -> float | None:
+    """z-score of the last row's value vs. the mean/stdev of the earlier
+    rows; None with <MIN_BASELINE_DAYS of baseline or zero variance."""
     if len(rows) < MIN_BASELINE_DAYS + 1:
         return None
     values = [float(row["value"]) for row in rows]
@@ -159,15 +160,22 @@ def zscore_latest(db: "Database", metric: str, aggregation: str, baseline_days: 
     return round((latest - mean) / stdev, 2)
 
 
+def zscore_latest(db: "Database", metric: str, aggregation: str, baseline_days: int = BASELINE_DAYS) -> float | None:
+    """Latest day's value vs. the mean/stdev of the prior baseline days
+    (latest excluded); None with <MIN_BASELINE_DAYS of baseline or zero
+    variance."""
+    return _zscore_from_rows(db.history(metric, aggregation, days=baseline_days + 1))
+
+
 def detect_anomalies(db: "Database", threshold: float = ANOMALY_THRESHOLD) -> list[Anomaly]:
     """Watchlist metrics whose latest day deviates ≥ threshold stdevs from
     their 30-day baseline."""
     anomalies: list[Anomaly] = []
     for metric, aggregation in ANOMALY_METRICS:
-        z = zscore_latest(db, metric, aggregation)
+        rows = db.history(metric, aggregation, days=BASELINE_DAYS + 1)
+        z = _zscore_from_rows(rows)
         if z is None or abs(z) < threshold:
             continue
-        rows = db.history(metric, aggregation, days=BASELINE_DAYS + 1)
         values = [float(row["value"]) for row in rows]
         baseline_mean = sum(values[:-1]) / len(values[:-1])
         anomalies.append(
@@ -186,14 +194,15 @@ def insights_summary(db: "Database") -> dict[str, object]:
     """JSON body for GET /insights."""
     correlations = []
     for pair in CORRELATION_PAIRS:
-        result = correlation(db, pair)
+        pairs = aligned_pairs(db, pair)
+        result = _correlation_from_pairs(pairs)
         correlations.append(
             {
                 "pair": pair.key,
                 "description": pair.description,
                 "lag_days": pair.lag_days,
                 "r": result[0] if result else None,
-                "samples": result[1] if result else len(aligned_pairs(db, pair)),
+                "samples": result[1] if result else len(pairs),
             }
         )
     return {

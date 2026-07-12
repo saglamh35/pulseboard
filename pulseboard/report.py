@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from pulseboard.coach import CoachSummary, coach_prompt, generate_coach_summary, prompt_links
-from pulseboard.db import Database
+from pulseboard.db import Database, freshness_seconds
 from pulseboard.goals import GOAL_DEFS, SLEEP_DEBT_DAYS, goals_met_in_window, sleep_debt_hours, streak_days
 from pulseboard.insights import Anomaly, detect_anomalies
 from pulseboard.metrics import REGISTRY
@@ -101,16 +101,6 @@ def _reduce(db: Database, metric: str, aggregation: str, reduce: str, start: str
     stats = db.range_stats(metric, aggregation, start, end)
     value = stats["total"] if reduce == "sum" else stats["mean"]
     return (round(float(value), 2) if value is not None else None, int(stats["days"]))
-
-
-def freshness_seconds(db: Database, now: datetime | None = None) -> float | None:
-    last_ingest = db.last_ingest_at()
-    if last_ingest is None:
-        return None
-    ingested = datetime.fromisoformat(last_ingest)
-    if ingested.tzinfo is None:
-        ingested = ingested.replace(tzinfo=timezone.utc)
-    return ((now or datetime.now(timezone.utc)) - ingested).total_seconds()
 
 
 def _goal_label(metric: str) -> str:

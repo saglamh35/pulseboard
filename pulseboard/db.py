@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -95,43 +96,73 @@ def resolve_db_path() -> str:
     return os.environ.get("PULSEBOARD_DB_PATH", DEFAULT_DB_PATH)
 
 
+def freshness_seconds(db: "Database", now: datetime | None = None) -> float | None:
+    """Seconds since the most recent ingest; None before any ingest.
+
+    Naive stored timestamps (legacy rows) are treated as UTC. Shared by
+    /status, the weekly report and the doctor CLI."""
+    last_ingest = db.last_ingest_at()
+    if last_ingest is None:
+        return None
+    ingested = datetime.fromisoformat(last_ingest)
+    if ingested.tzinfo is None:
+        ingested = ingested.replace(tzinfo=timezone.utc)
+    return ((now or datetime.now(timezone.utc)) - ingested).total_seconds()
+
+
 class Database:
-    """Thin SQLite wrapper; one connection shared across the app."""
+    """Thin SQLite wrapper; one connection shared across the app.
+
+    The connection is used from several threads at once (the async /ingest
+    handler on the event loop, sync endpoints and the /metrics collector in
+    Starlette's threadpool), so every access is serialized through a lock —
+    a single sqlite3 connection is not safe for concurrent statements.
+    Nested helpers (`series` → `history`) must take the lock only once; keep
+    the lock on the innermost `self._conn`-touching method.
+    """
 
     def __init__(self, path: str | None = None) -> None:
         self.path = path or resolve_db_path()
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
         self._conn = sqlite3.connect(self.path, timeout=10.0, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        # WAL lets external readers of the same file (e.g. the Grafana SQLite
+        # datasource) coexist with our writes. Adds -wal/-shm sidecar files.
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(_SCHEMA_SQL)
         self._conn.commit()
 
     def close(self) -> None:
-        self._conn.close()
+        with self._lock:
+            self._conn.close()
 
     def upsert_records(self, records: list[MetricRecord]) -> int:
         """Insert or update records; returns the number of records written."""
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        self._conn.executemany(
-            _UPSERT_SQL,
-            [(r.date, r.metric, r.value, r.unit, r.aggregation, r.source, now) for r in records],
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.executemany(
+                _UPSERT_SQL,
+                [(r.date, r.metric, r.value, r.unit, r.aggregation, r.source, now) for r in records],
+            )
+            self._conn.commit()
         return len(records)
 
     def latest_values(self) -> list[sqlite3.Row]:
         """Most recent row per (metric, aggregation) — what the exporter exposes."""
-        return self._conn.execute(
-            """
-            SELECT hm.date, hm.metric, hm.value, hm.unit, hm.aggregation, hm.source
-            FROM health_metrics hm
-            WHERE hm.date = (
-                SELECT MAX(date) FROM health_metrics
-                WHERE metric = hm.metric AND aggregation = hm.aggregation
-            )
-            ORDER BY hm.metric, hm.aggregation
-            """
-        ).fetchall()
+        with self._lock:
+            return self._conn.execute(
+                """
+                SELECT hm.date, hm.metric, hm.value, hm.unit, hm.aggregation, hm.source
+                FROM health_metrics hm
+                WHERE hm.date = (
+                    SELECT MAX(date) FROM health_metrics
+                    WHERE metric = hm.metric AND aggregation = hm.aggregation
+                )
+                ORDER BY hm.metric, hm.aggregation
+                """
+            ).fetchall()
 
     def history(
         self,
@@ -158,27 +189,30 @@ class Database:
         if days is not None:
             sql += " LIMIT ?"
             params.append(days)
-        rows = self._conn.execute(sql, params).fetchall()
+        with self._lock:
+            rows = self._conn.execute(sql, params).fetchall()
         return list(reversed(rows))
 
     def last_ingest_at(self) -> str | None:
         """Most recent ingested_at across metrics and workouts — "is the
         phone still posting", regardless of which dates the data was for."""
-        row = self._conn.execute(
-            """
-            SELECT MAX(ingested_at) FROM (
-                SELECT ingested_at FROM health_metrics
-                UNION ALL
-                SELECT ingested_at FROM workouts
-            )
-            """
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                """
+                SELECT MAX(ingested_at) FROM (
+                    SELECT ingested_at FROM health_metrics
+                    UNION ALL
+                    SELECT ingested_at FROM workouts
+                )
+                """
+            ).fetchone()
         return row[0] if row and row[0] is not None else None
 
     def latest_metric_date(self) -> str | None:
         """Newest date we have data FOR — a backfill of old days bumps
         last_ingest_at but not this, so staleness alerts key off this one."""
-        row = self._conn.execute("SELECT MAX(date) FROM health_metrics").fetchone()
+        with self._lock:
+            row = self._conn.execute("SELECT MAX(date) FROM health_metrics").fetchone()
         return row[0] if row and row[0] is not None else None
 
     def series(self, metric: str, aggregation: str, days: int) -> dict[str, float]:
@@ -188,44 +222,48 @@ class Database:
     def range_stats(self, metric: str, aggregation: str, start: str, end: str) -> sqlite3.Row:
         """SUM/AVG/COUNT over an inclusive date window (total/mean are NULL
         when no rows fall in the window)."""
-        return self._conn.execute(
-            """
-            SELECT SUM(value) AS total, AVG(value) AS mean, COUNT(*) AS days
-            FROM health_metrics
-            WHERE metric = ? AND aggregation = ? AND date BETWEEN ? AND ?
-            """,
-            (metric, aggregation, start, end),
-        ).fetchone()
+        with self._lock:
+            return self._conn.execute(
+                """
+                SELECT SUM(value) AS total, AVG(value) AS mean, COUNT(*) AS days
+                FROM health_metrics
+                WHERE metric = ? AND aggregation = ? AND date BETWEEN ? AND ?
+                """,
+                (metric, aggregation, start, end),
+            ).fetchone()
 
     def workouts_between(self, start: str, end: str) -> list[sqlite3.Row]:
-        return self._conn.execute(
-            """
-            SELECT start, date, activity_type, duration_min, energy_kcal, distance_km, source
-            FROM workouts WHERE date BETWEEN ? AND ? ORDER BY start
-            """,
-            (start, end),
-        ).fetchall()
+        with self._lock:
+            return self._conn.execute(
+                """
+                SELECT start, date, activity_type, duration_min, energy_kcal, distance_km, source
+                FROM workouts WHERE date BETWEEN ? AND ? ORDER BY start
+                """,
+                (start, end),
+            ).fetchall()
 
     def upsert_workouts(self, workouts: list[WorkoutRecord]) -> int:
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        self._conn.executemany(
-            _WORKOUT_UPSERT_SQL,
-            [
-                (w.start, w.date, w.activity_type, w.duration_min, w.energy_kcal, w.distance_km, w.source, now)
-                for w in workouts
-            ],
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.executemany(
+                _WORKOUT_UPSERT_SQL,
+                [
+                    (w.start, w.date, w.activity_type, w.duration_min, w.energy_kcal, w.distance_km, w.source, now)
+                    for w in workouts
+                ],
+            )
+            self._conn.commit()
         return len(workouts)
 
     def recent_workouts(self, limit: int = 20) -> list[sqlite3.Row]:
-        return self._conn.execute(
-            """
-            SELECT start, date, activity_type, duration_min, energy_kcal, distance_km, source
-            FROM workouts ORDER BY start DESC LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
+        with self._lock:
+            return self._conn.execute(
+                """
+                SELECT start, date, activity_type, duration_min, energy_kcal, distance_km, source
+                FROM workouts ORDER BY start DESC LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
 
     def workout_rollups_for_dates(self, dates: list[str]) -> list[sqlite3.Row]:
         """Per-date COUNT/SUM(duration_min)/SUM(energy_kcal) from the
@@ -233,41 +271,48 @@ class Database:
         if not dates:
             return []
         placeholders = ",".join("?" for _ in dates)
-        return self._conn.execute(
-            f"""
-            SELECT date, COUNT(*) AS count, SUM(duration_min) AS duration_min, SUM(energy_kcal) AS energy_kcal
-            FROM workouts WHERE date IN ({placeholders}) GROUP BY date
-            """,
-            dates,
-        ).fetchall()
+        with self._lock:
+            return self._conn.execute(
+                f"""
+                SELECT date, COUNT(*) AS count, SUM(duration_min) AS duration_min, SUM(energy_kcal) AS energy_kcal
+                FROM workouts WHERE date IN ({placeholders}) GROUP BY date
+                """,
+                dates,
+            ).fetchall()
 
     def earliest_workout_date(self) -> str | None:
-        row = self._conn.execute("SELECT MIN(date) FROM workouts").fetchone()
+        with self._lock:
+            row = self._conn.execute("SELECT MIN(date) FROM workouts").fetchone()
         return row[0] if row and row[0] is not None else None
 
     def count_workouts(self) -> int:
-        return int(self._conn.execute("SELECT COUNT(*) FROM workouts").fetchone()[0])
+        with self._lock:
+            return int(self._conn.execute("SELECT COUNT(*) FROM workouts").fetchone()[0])
 
     def weekly_rollup(self, metric: str, aggregation: str) -> list[sqlite3.Row]:
-        """Per-ISO-week totals and means for one metric, oldest week first.
+        """Per-week totals and means for one metric, oldest week first.
 
-        `week_start` is the first stored date of that week — what the
-        dashboard uses as the bar's time coordinate.
+        `week` is the Monday of each Mon-Sun week (matching the report's
+        week window); grouping by the Monday date instead of strftime('%W')
+        keeps a week that straddles Jan 1 in one bucket. `week_start` is the
+        first stored date of that week.
         """
-        return self._conn.execute(
-            """
-            SELECT strftime('%Y-%W', date) AS week,
-                   MIN(date) AS week_start,
-                   SUM(value) AS total,
-                   AVG(value) AS mean,
-                   COUNT(*) AS days
-            FROM health_metrics
-            WHERE metric = ? AND aggregation = ?
-            GROUP BY week
-            ORDER BY week_start
-            """,
-            (metric, aggregation),
-        ).fetchall()
+        with self._lock:
+            return self._conn.execute(
+                """
+                SELECT strftime('%Y-%m-%d', date, 'weekday 0', '-6 days') AS week,
+                       MIN(date) AS week_start,
+                       SUM(value) AS total,
+                       AVG(value) AS mean,
+                       COUNT(*) AS days
+                FROM health_metrics
+                WHERE metric = ? AND aggregation = ?
+                GROUP BY week
+                ORDER BY week_start
+                """,
+                (metric, aggregation),
+            ).fetchall()
 
     def count_rows(self) -> int:
-        return int(self._conn.execute("SELECT COUNT(*) FROM health_metrics").fetchone()[0])
+        with self._lock:
+            return int(self._conn.execute("SELECT COUNT(*) FROM health_metrics").fetchone()[0])

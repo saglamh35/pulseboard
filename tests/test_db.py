@@ -1,4 +1,7 @@
-from pulseboard.db import Database, MetricRecord, WorkoutRecord
+import threading
+from datetime import datetime, timezone
+
+from pulseboard.db import Database, MetricRecord, WorkoutRecord, freshness_seconds
 
 
 def make_record(**overrides) -> MetricRecord:
@@ -114,6 +117,20 @@ class TestFreshness:
         db.upsert_workouts([workout])
         assert db.last_ingest_at() is not None
 
+    def test_freshness_seconds_empty_db_is_none(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        assert freshness_seconds(db) is None
+
+    def test_freshness_seconds_treats_naive_timestamp_as_utc(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        db.upsert_records([make_record()])
+        # Legacy rows stored ingested_at without a timezone offset.
+        with db._lock:
+            db._conn.execute("UPDATE health_metrics SET ingested_at = '2026-07-09T12:00:00'")
+            db._conn.commit()
+        now = datetime(2026, 7, 9, 13, 0, 0, tzinfo=timezone.utc)
+        assert freshness_seconds(db, now=now) == 3600.0
+
 
 class TestRangeQueries:
     def test_series_maps_dates_to_values(self, tmp_path):
@@ -172,3 +189,33 @@ class TestRangeQueries:
         assert rows["2026-07-01"]["count"] == 2
         assert rows["2026-07-01"]["duration_min"] == 50.0
         assert rows["2026-07-01"]["energy_kcal"] == 380.0
+
+
+class TestConcurrentAccess:
+    def test_parallel_writes_and_reads(self, tmp_path):
+        """The one shared connection is hit from the event loop and the
+        Starlette threadpool at once; the internal lock must serialize it."""
+        db = Database(str(tmp_path / "test.db"))
+        errors: list[Exception] = []
+
+        def worker(thread_id: int) -> None:
+            try:
+                for i in range(20):
+                    date = f"2026-07-{(i % 28) + 1:02d}"
+                    db.upsert_records([make_record(date=date, metric=f"metric_{thread_id}", value=float(i))])
+                    db.latest_values()
+                    db.history(f"metric_{thread_id}")
+                    db.count_rows()
+            except Exception as exc:  # pragma: no cover - only on regression
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker, args=(t,)) for t in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert errors == []
+        # 8 metrics x 20 distinct dates, upserts idempotent per (date, metric)
+        assert db.count_rows() == 8 * 20
+        db.close()
