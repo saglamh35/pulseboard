@@ -6,6 +6,7 @@ Run with: uvicorn --factory pulseboard.app:create_app
 
 from __future__ import annotations
 
+import hmac
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -41,7 +42,8 @@ def _require_token(request: Request) -> None:
     if not token:
         return
     supplied = request.headers.get("authorization", "")
-    if supplied != f"Bearer {token}":
+    # Constant-time compare (bytes: the str form raises on non-ASCII input).
+    if not hmac.compare_digest(supplied.encode(), f"Bearer {token}".encode()):
         raise HTTPException(status_code=401, detail="Missing or invalid bearer token")
 
 
