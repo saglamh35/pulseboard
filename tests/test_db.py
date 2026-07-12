@@ -1,3 +1,5 @@
+import threading
+
 from pulseboard.db import Database, MetricRecord, WorkoutRecord
 
 
@@ -172,3 +174,33 @@ class TestRangeQueries:
         assert rows["2026-07-01"]["count"] == 2
         assert rows["2026-07-01"]["duration_min"] == 50.0
         assert rows["2026-07-01"]["energy_kcal"] == 380.0
+
+
+class TestConcurrentAccess:
+    def test_parallel_writes_and_reads(self, tmp_path):
+        """The one shared connection is hit from the event loop and the
+        Starlette threadpool at once; the internal lock must serialize it."""
+        db = Database(str(tmp_path / "test.db"))
+        errors: list[Exception] = []
+
+        def worker(thread_id: int) -> None:
+            try:
+                for i in range(20):
+                    date = f"2026-07-{(i % 28) + 1:02d}"
+                    db.upsert_records([make_record(date=date, metric=f"metric_{thread_id}", value=float(i))])
+                    db.latest_values()
+                    db.history(f"metric_{thread_id}")
+                    db.count_rows()
+            except Exception as exc:  # pragma: no cover - only on regression
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker, args=(t,)) for t in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert errors == []
+        # 8 metrics x 20 distinct dates, upserts idempotent per (date, metric)
+        assert db.count_rows() == 8 * 20
+        db.close()
