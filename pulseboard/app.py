@@ -11,7 +11,6 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 from typing import AsyncIterator
 
 from fastapi import FastAPI, HTTPException, Request
@@ -20,7 +19,7 @@ from pydantic import ValidationError
 
 import pulseboard
 from pulseboard.coach import coach_prompt, prompt_links
-from pulseboard.db import Database, MetricRecord
+from pulseboard.db import Database, MetricRecord, freshness_seconds
 from pulseboard.exporter import build_metrics_app
 from pulseboard.ingest.adapters.health_auto_export import extract_workouts, is_hae_payload, normalize_hae
 from pulseboard.ingest.canonical import CanonicalPayload, normalize
@@ -93,19 +92,13 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.get("/status")
     def status() -> dict[str, object]:
         """Setup/debugging snapshot: is data arriving, and how fresh is it?"""
-        last_ingest = db.last_ingest_at()
-        freshness_seconds: float | None = None
-        if last_ingest is not None:
-            ingested = datetime.fromisoformat(last_ingest)
-            if ingested.tzinfo is None:
-                ingested = ingested.replace(tzinfo=timezone.utc)
-            freshness_seconds = round((datetime.now(timezone.utc) - ingested).total_seconds(), 1)
+        age = freshness_seconds(db)
         return {
             "rows": db.count_rows(),
             "workouts": db.count_workouts(),
-            "last_ingest_at": last_ingest,
+            "last_ingest_at": db.last_ingest_at(),
             "latest_data_date": db.latest_metric_date(),
-            "freshness_seconds": freshness_seconds,
+            "freshness_seconds": round(age, 1) if age is not None else None,
             "metrics_tracked": len(REGISTRY),
             "version": pulseboard.__version__,
         }
@@ -185,6 +178,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
         workouts_stored = db.upsert_workouts(workouts) if workouts else 0
         if workouts:
             affected_dates = sorted({w.date for w in workouts})
+            # Derived rollup rows are deliberately not counted in `stored`,
+            # which reports only what the payload itself carried.
             db.upsert_records(_workout_rollup_records(db, affected_dates, source))
         latest_date = max((r.date for r in records), default=None)
         logger.info(

@@ -16,10 +16,9 @@ import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
-from pulseboard.db import Database, resolve_db_path
+from pulseboard.db import Database, freshness_seconds, resolve_db_path
 
 STALE_AFTER_SECONDS = 2 * 24 * 3600
 _TIMEOUT_SECONDS = 5
@@ -68,13 +67,9 @@ def check_database(db_path: str) -> list[CheckResult]:
         latest_date = db.latest_metric_date()
         results.append(CheckResult("newest data day", True, str(latest_date)))
 
-        last_ingest = db.last_ingest_at()
-        if last_ingest is None:
+        age = freshness_seconds(db)
+        if age is None:
             return results
-        ingested = datetime.fromisoformat(last_ingest)
-        if ingested.tzinfo is None:
-            ingested = ingested.replace(tzinfo=timezone.utc)
-        age = (datetime.now(timezone.utc) - ingested).total_seconds()
         if age > STALE_AFTER_SECONDS:
             results.append(
                 CheckResult(

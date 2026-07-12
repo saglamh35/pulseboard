@@ -96,6 +96,20 @@ def resolve_db_path() -> str:
     return os.environ.get("PULSEBOARD_DB_PATH", DEFAULT_DB_PATH)
 
 
+def freshness_seconds(db: "Database", now: datetime | None = None) -> float | None:
+    """Seconds since the most recent ingest; None before any ingest.
+
+    Naive stored timestamps (legacy rows) are treated as UTC. Shared by
+    /status, the weekly report and the doctor CLI."""
+    last_ingest = db.last_ingest_at()
+    if last_ingest is None:
+        return None
+    ingested = datetime.fromisoformat(last_ingest)
+    if ingested.tzinfo is None:
+        ingested = ingested.replace(tzinfo=timezone.utc)
+    return ((now or datetime.now(timezone.utc)) - ingested).total_seconds()
+
+
 class Database:
     """Thin SQLite wrapper; one connection shared across the app.
 
@@ -276,15 +290,17 @@ class Database:
             return int(self._conn.execute("SELECT COUNT(*) FROM workouts").fetchone()[0])
 
     def weekly_rollup(self, metric: str, aggregation: str) -> list[sqlite3.Row]:
-        """Per-ISO-week totals and means for one metric, oldest week first.
+        """Per-week totals and means for one metric, oldest week first.
 
-        `week_start` is the first stored date of that week — what the
-        dashboard uses as the bar's time coordinate.
+        `week` is the Monday of each Mon-Sun week (matching the report's
+        week window); grouping by the Monday date instead of strftime('%W')
+        keeps a week that straddles Jan 1 in one bucket. `week_start` is the
+        first stored date of that week.
         """
         with self._lock:
             return self._conn.execute(
                 """
-                SELECT strftime('%Y-%W', date) AS week,
+                SELECT strftime('%Y-%m-%d', date, 'weekday 0', '-6 days') AS week,
                        MIN(date) AS week_start,
                        SUM(value) AS total,
                        AVG(value) AS mean,

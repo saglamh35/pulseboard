@@ -58,6 +58,25 @@ class TestWeeklyRollup:
         assert first["days"] + second["days"] == 7
         assert first["total"] + second["total"] == 28000
         assert first["week_start"] == "2026-07-08"
+        # the week key is the Monday of each Mon-Sun week
+        assert first["week"] == "2026-07-06"
+        assert second["week"] == "2026-07-13"
+
+    def test_week_straddling_new_year_stays_one_bucket(self, tmp_path):
+        db = Database(str(tmp_path / "t.db"))
+        # 2026-12-28 is a Monday, so Dec 31 and Jan 1 share a Mon-Sun week
+        # (strftime('%W') used to split them into different year buckets).
+        db.upsert_records(
+            [
+                MetricRecord("2026-12-31", "steps", 1000.0, "count", "sum", "canonical"),
+                MetricRecord("2027-01-01", "steps", 2000.0, "count", "sum", "canonical"),
+            ]
+        )
+        rollup = db.weekly_rollup("steps", "sum")
+        assert len(rollup) == 1
+        assert rollup[0]["week"] == "2026-12-28"
+        assert rollup[0]["total"] == 3000
+        assert rollup[0]["days"] == 2
 
     def test_empty_metric_gives_empty_rollup(self, tmp_path):
         db = Database(str(tmp_path / "t.db"))

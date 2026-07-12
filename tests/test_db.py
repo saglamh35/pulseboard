@@ -1,6 +1,7 @@
 import threading
+from datetime import datetime, timezone
 
-from pulseboard.db import Database, MetricRecord, WorkoutRecord
+from pulseboard.db import Database, MetricRecord, WorkoutRecord, freshness_seconds
 
 
 def make_record(**overrides) -> MetricRecord:
@@ -115,6 +116,20 @@ class TestFreshness:
         )
         db.upsert_workouts([workout])
         assert db.last_ingest_at() is not None
+
+    def test_freshness_seconds_empty_db_is_none(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        assert freshness_seconds(db) is None
+
+    def test_freshness_seconds_treats_naive_timestamp_as_utc(self, tmp_path):
+        db = Database(str(tmp_path / "test.db"))
+        db.upsert_records([make_record()])
+        # Legacy rows stored ingested_at without a timezone offset.
+        with db._lock:
+            db._conn.execute("UPDATE health_metrics SET ingested_at = '2026-07-09T12:00:00'")
+            db._conn.commit()
+        now = datetime(2026, 7, 9, 13, 0, 0, tzinfo=timezone.utc)
+        assert freshness_seconds(db, now=now) == 3600.0
 
 
 class TestRangeQueries:
