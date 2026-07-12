@@ -211,7 +211,8 @@ prometheus/            scrape config
 deploy/helm/           Helm chart for home-lab Kubernetes (docs/K8S.md)
 grafana/               provisioned datasources + dashboard JSON
 samples/               synthetic payloads & export.xml used by the tests
-docs/                  INGEST, SHORTCUT, INSIGHTS, REPORTS, SCORE, GOALS, TRAINING_LOAD, AI_COACH, OBSERVABILITY, ALERTING, K8S, ROADMAP
+docs/                  INGEST, SHORTCUT, INSIGHTS, REPORTS, SCORE, GOALS, TRAINING_LOAD, AI_COACH, OBSERVABILITY, ALERTING, K8S, REGENERATE_SCREENSHOTS, ROADMAP
+scripts/               seed_demo.py — synthetic demo data for screenshots/local demos
 ```
 
 ## Development
