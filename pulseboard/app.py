@@ -7,6 +7,7 @@ Run with: uvicorn --factory pulseboard.app:create_app
 from __future__ import annotations
 
 import hmac
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -147,11 +148,20 @@ def create_app(db_path: str | None = None) -> FastAPI:
     @app.post("/ingest")
     async def ingest(request: Request) -> dict[str, object]:
         _require_token(request)
-        body = await request.body()
-        if len(body) > MAX_BODY_BYTES:
-            raise HTTPException(status_code=413, detail=f"Request body exceeds {MAX_BODY_BYTES} bytes")
+        too_large = HTTPException(status_code=413, detail=f"Request body exceeds {MAX_BODY_BYTES} bytes")
+        # Reject on the declared size first, then enforce the cap while
+        # streaming so an oversized (or chunked, length-less) body is never
+        # fully buffered.
+        declared = request.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > MAX_BODY_BYTES:
+            raise too_large
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > MAX_BODY_BYTES:
+                raise too_large
         try:
-            payload = await request.json()
+            payload = json.loads(bytes(body))
         except Exception:
             raise HTTPException(status_code=400, detail="Request body is not valid JSON")
         if not isinstance(payload, dict):

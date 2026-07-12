@@ -222,6 +222,44 @@ class TestIngestGuards:
         response = client.post("/ingest", content=huge, headers={"content-type": "application/json"})
         assert response.status_code == 413
 
+    def test_oversized_chunked_body_is_413(self, tmp_path):
+        # A generator body is sent chunked with no Content-Length, so only
+        # the streaming cap can catch it.
+        client = make_client(tmp_path)
+
+        def chunks():
+            yield b'{"date": "2026-07-09", "metrics": ['
+            for _ in range(11):
+                yield b" " * (1024 * 1024)
+            yield b"]}"
+
+        response = client.post("/ingest", content=chunks(), headers={"content-type": "application/json"})
+        assert response.status_code == 413
+
+    def test_nan_value_is_422(self, tmp_path):
+        # json.loads accepts the NaN/Infinity literals; they must not reach
+        # the DB (and from there the Prometheus gauges). Raw bytes because
+        # httpx's json= refuses to serialize NaN.
+        client = make_client(tmp_path)
+        for literal in (b"NaN", b"Infinity", b"-Infinity"):
+            body = b'{"date": "2026-07-09", "metrics": [{"name": "steps", "value": ' + literal + b"}]}"
+            response = client.post("/ingest", content=body, headers={"content-type": "application/json"})
+            assert response.status_code == 422, literal
+        client_metrics = client.get("/metrics").text
+        assert "pulseboard_steps " not in client_metrics
+
+    def test_hae_nan_point_is_skipped(self, tmp_path):
+        client = make_client(tmp_path)
+        body = (
+            b'{"data": {"metrics": [{"name": "step_count", "units": "count", "data": ['
+            b'{"date": "2026-07-09 08:00:00 +0000", "qty": NaN},'
+            b'{"date": "2026-07-09 09:00:00 +0000", "qty": 500}]}]}}'
+        )
+        response = client.post("/ingest", content=body, headers={"content-type": "application/json"})
+        assert response.status_code == 200
+        assert response.json()["stored"] == 1
+        assert "pulseboard_steps 500.0" in client.get("/metrics").text
+
     def test_token_required_when_configured(self, tmp_path, monkeypatch):
         monkeypatch.setenv("PULSEBOARD_API_TOKEN", "sekrit")
         client = make_client(tmp_path)

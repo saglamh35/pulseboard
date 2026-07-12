@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 from collections import defaultdict
 from datetime import datetime
 from typing import BinaryIO
@@ -74,6 +75,15 @@ class _EntityDeclGuard:
 
 def _parse_ts(raw: str) -> datetime:
     return datetime.strptime(raw, _APPLE_TS_FORMAT)
+
+
+def _parse_finite(raw: str) -> float | None:
+    """float() that treats non-finite values ("nan", "inf") as unparseable."""
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    return value if math.isfinite(value) else None
 
 
 def _convert_value(canonical: str, value: float, unit: str) -> float:
@@ -187,9 +197,8 @@ def _handle_record(elem, agg: _Aggregator) -> None:
     canonical = HEALTHKIT_TO_CANONICAL.get(record_type)
     if canonical is None:
         return
-    try:
-        value = float(elem.get("value", ""))
-    except ValueError:
+    value = _parse_finite(elem.get("value", ""))
+    if value is None:
         return
     agg.add(canonical, start[:10], start, _convert_value(canonical, value, elem.get("unit", "")))
 
@@ -200,26 +209,17 @@ def _handle_workout(elem, agg: _Aggregator) -> None:
         return
     day = start[:10]
     agg.add("workouts_count", day, start, 1.0)
-    try:
-        duration = float(elem.get("duration", ""))
-    except ValueError:
-        duration = 0.0
+    duration = _parse_finite(elem.get("duration", "")) or 0.0
     if elem.get("durationUnit", "min") == "s":
         duration /= 60.0
     if duration:
         agg.add("workouts_duration_min", day, start, duration)
-    try:
-        energy = float(elem.get("totalEnergyBurned", ""))
-    except ValueError:
-        energy = 0.0
+    energy = _parse_finite(elem.get("totalEnergyBurned", "")) or 0.0
     if energy:
         unit = elem.get("totalEnergyBurnedUnit", "kcal")
         energy = _convert_value("workouts_energy_kcal", energy, unit)
         agg.add("workouts_energy_kcal", day, start, energy)
-    try:
-        distance = float(elem.get("totalDistance", ""))
-    except ValueError:
-        distance = 0.0
+    distance = _parse_finite(elem.get("totalDistance", "")) or 0.0
     if elem.get("totalDistanceUnit", "km") == "mi":
         distance *= 1.609344
     activity = elem.get("workoutActivityType", "Unknown").removeprefix("HKWorkoutActivityType")

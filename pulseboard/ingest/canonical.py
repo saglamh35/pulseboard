@@ -19,7 +19,9 @@ logger = logging.getLogger(__name__)
 
 class CanonicalMetric(BaseModel):
     name: str
-    value: float
+    # json.loads accepts NaN/Infinity literals; reject them here so they can't
+    # reach the DB and leak into Prometheus gauges.
+    value: float = Field(allow_inf_nan=False)
     unit: str | None = None
     aggregation: str | None = None
 
